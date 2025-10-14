@@ -1,0 +1,17 @@
+name: ov-whisper
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - torch>=2.0.0
+    - torchaudio>=2.0.0
+    - gradio>=4.0.0
+    - numpy>=1.24.0
+    - datasets
+    - huggingface_hub
+    - openvino>=2024.5.0
+    - openvino-tokenizers
+    - openvino-genai
