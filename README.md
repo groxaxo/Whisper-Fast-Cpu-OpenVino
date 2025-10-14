@@ -32,7 +32,7 @@ Real-time speech transcription and translation server powered by OpenAI's Whispe
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR_USERNAME/Whisper-Fast-CPU-OpenVINO.git
+git clone https://github.com/groxaxo/Whisper-Fast-CPU-OpenVINO.git
 cd Whisper-Fast-CPU-OpenVINO
 
 # Create conda environment
@@ -318,7 +318,7 @@ If you use this project, please cite:
   title={Whisper-Fast-CPU-OpenVINO: Fast CPU-based Whisper Transcription Server},
   author={Your Name},
   year={2025},
-  url={https://github.com/YOUR_USERNAME/Whisper-Fast-CPU-OpenVINO}
+  url={https://github.com/groxaxo/Whisper-Fast-CPU-OpenVINO}
 }
 
 @article{radford2022whisper,
@@ -331,8 +331,8 @@ If you use this project, please cite:
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/YOUR_USERNAME/Whisper-Fast-CPU-OpenVINO/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/YOUR_USERNAME/Whisper-Fast-CPU-OpenVINO/discussions)
+- **Issues:** [GitHub Issues](https://github.com/groxaxo/Whisper-Fast-CPU-OpenVINO/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/groxaxo/Whisper-Fast-CPU-OpenVINO/discussions)
 
 ## Legal information
 

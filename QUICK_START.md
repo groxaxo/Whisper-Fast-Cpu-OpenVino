@@ -4,7 +4,7 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR_USERNAME/Whisper-Fast-CPU-OpenVINO.git
+git clone https://github.com/groxaxo/Whisper-Fast-CPU-OpenVINO.git
 cd Whisper-Fast-CPU-OpenVINO
 
 # Create conda environment
