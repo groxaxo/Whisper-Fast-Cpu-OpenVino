@@ -315,7 +315,7 @@ See [OpenVINO optimization guide](https://docs.openvino.ai/2025/openvino-workflo
 
 ## Configuration
 
-### Command Line Options
+### Gradio Interface Options
 
 ```bash
 python serve_whisper.py [OPTIONS]
@@ -327,54 +327,155 @@ Options:
   --threads THREADS       CPU threads (default: 8)
   --model-dir PATH        Model directory (default: ./model)
   --segment-seconds SEC   Audio segment length (default: 30.0)
+  --streams STREAMS       Parallel inference streams (default: AUTO)
+```
+
+### OpenAI API Options
+
+```bash
+python serve_openai_api.py [OPTIONS]
+
+Options:
+  --device DEVICE          Target device (default: CPU)
+  --port PORT             Server port (default: 8000)
+  --host HOST             Server host (default: 0.0.0.0)
+  --threads THREADS       CPU threads (default: 8)
+  --model-dir PATH        Model directory (default: ./model)
+  --streams STREAMS       Parallel inference streams (default: AUTO)
+```
+
+### Model Selection
+
+You can run any of the three available models by specifying the `--model-dir`:
+
+```bash
+# INT8-Turbo (default, fastest on modern CPUs)
+python serve_openai_api.py --model-dir model --threads 16
+
+# INT8-Lite (optimized for older/weaker CPUs)
+python serve_openai_api.py --model-dir model_int8_lite --threads 8
+
+# INT4 (smallest size, good for embedded systems)
+python serve_openai_api.py --model-dir model_int4 --threads 8
 ```
 
 ### Performance Tuning
 
-- **Threads:** Adjust `--threads` based on your CPU (default: 8)
-- **Streaming interval:** 3 seconds (optimized for stability)
+- **Threads:** Adjust `--threads` based on your CPU (8-20 recommended)
+- **Streams:** Use `AUTO` or set manually for parallel processing
+- **Streaming interval:** 3 seconds (optimized for stability in Gradio)
 - **Memory:** Automatic garbage collection prevents buildup
 
 ## Architecture
 
-### Streaming Mode
+### Gradio Interface (serve_whisper.py)
+
+**Streaming Mode:**
 ```
 Microphone → WebSocket → 3s chunks → OpenVINO Pipeline → Accumulate → Display
 ```
 
-### Upload Mode  
+**Upload Mode:**
 ```
 File Upload → Trim (optional) → Process Button → OpenVINO Pipeline → Display
 ```
 
+### OpenAI API (serve_openai_api.py)
+
+**Request Flow:**
+```
+HTTP POST → File Upload → Audio Processing → OpenVINO Pipeline → JSON Response
+```
+
+**Endpoints:**
+- `/v1/audio/transcriptions` - Transcribe audio (same language)
+- `/v1/audio/translations` - Translate audio to English
+- `/v1/models` - List available models
+- `/health` - Health check
+
 ### Key Components
 
-- **Frontend:** Gradio web interface
+- **Frontend:** Gradio web interface OR FastAPI REST API
 - **Backend:** OpenVINO GenAI WhisperPipeline
-- **Audio Processing:** 16kHz resampling, numpy arrays
+- **Audio Processing:** 16kHz resampling, mono conversion, normalization
 - **Memory Management:** Deep copy, rate limiting, garbage collection
+- **API Compatibility:** OpenAI Whisper API format (Open WebUI ready)
+
+## Testing
+
+### Quick API Test
+
+```bash
+# Start the OpenAI API server
+./start_openai_api.sh
+
+# Test with sample audio
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@sample.wav" \
+  -F "model=whisper-1" \
+  -F "language=en"
+
+# Check health
+curl http://localhost:8000/health
+```
+
+### Benchmark Your System
+
+```bash
+# Test with optimal threads for your CPU
+python benchmark_simple.py --model-dir model --threads 16
+
+# Compare all available models
+python benchmark_all_models.py
+
+# Visual comparison
+python compare_models.py
+```
+
+### Model Testing
+
+Test each model individually:
+
+```bash
+# Test INT8-Turbo
+python serve_openai_api.py --model-dir model --threads 16 &
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@sample.wav" -F "model=whisper-1"
+
+# Test INT8-Lite
+python serve_openai_api.py --model-dir model_int8_lite --threads 8 &
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@sample.wav" -F "model=whisper-1"
+
+# Test INT4
+python serve_openai_api.py --model-dir model_int4 --threads 8 &
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@sample.wav" -F "model=whisper-1"
+```
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| Port already in use | Run `pkill -f serve_whisper` first |
-| Server crashes | Check `server.log` for errors |
-| No transcription | Verify audio input levels |
-| Slow processing | Reduce `--threads` or use shorter audio |
-| Memory issues | Server auto-manages with GC |
+| Port already in use | Run `pkill -f serve_whisper` or `pkill -f serve_openai_api` |
+| Server crashes | Check `server.log` or `api_server.log` for errors |
+| No transcription | Verify audio input levels and format (16kHz recommended) |
+| Slow processing | Reduce `--threads` or try a different model |
+| Memory issues | Server auto-manages with GC, try INT4 model for lower memory |
+| API connection refused | Ensure server is running: `lsof -i :8000` |
+| Model not found | Run `python setup_model.py` to download models |
 
 ## Performance
 
-### Benchmark Results (Intel i7-12700KF, 12th Gen, 19 Threads)
+### Benchmark Results (Intel i7-12700KF, 12th Gen)
 
 Real-world benchmark with 84 seconds of test audio across three files:
 
-| Model | Avg Speed | RTF | Processing Time | Memory | Accuracy |
-|-------|-----------|-----|-----------------|--------|----------|
-| **INT8-Turbo** ⭐ | **2.12x RT** | 0.49x | 33.8s / 84s | ~2.0 GB | 100% |
-| **INT8-Lite** | 1.78x RT | 0.66x | 35.5s / 84s | ~1.8 GB | 100% |
-| **INT4** | 1.10x RT | 1.51x | 59.7s / 84s | ~1.5 GB | ~96% |
+| Model | Location | Avg Speed | RTF | Processing Time | Memory | Accuracy |
+|-------|----------|-----------|-----|-----------------|--------|----------|
+| **INT8-Turbo** ⭐ | `model/` | **2.12x RT** | 0.49x | 33.8s / 84s | ~2.0 GB | 100% |
+| **INT8-Lite** | `model_int8_lite/` | 1.78x RT | 0.66x | 35.5s / 84s | ~1.8 GB | 100% |
+| **INT4** | `model_int4/` | 1.10x RT | 1.51x | 59.7s / 84s | ~1.5 GB | ~96% |
 
 **RTF** = Real-Time Factor (lower is better)  
 **Speed** = Processing speed multiplier (higher is better)
@@ -382,40 +483,36 @@ Real-world benchmark with 84 seconds of test audio across three files:
 **Key Findings:**
 - **INT8-Turbo** is the fastest with 19 threads: processes 1 minute in ~28 seconds
 - **INT8-Lite** performs well on long files (2.84x on 70s audio)
-- **INT4** surprisingly slower - doesn't scale well with high thread counts
+- **INT4** has smallest memory footprint but doesn't scale well with high thread counts
 - Both INT8 models maintain 100% accuracy (same as original Whisper)
 - Thread scaling: INT8-Turbo gains 28% speed with 19 vs 8 threads
 - Stable memory usage during processing
 
+**Model Selection Guide:**
+
+| Your Hardware | Recommended Model | Directory | Thread Count | Expected Performance |
+|---------------|-------------------|-----------|--------------|----------------------|
+| High-end CPU (8+ cores, 3+ GHz) | **INT8-Turbo** ⭐ | `model/` | 16-20 threads | 2.0-2.5x real-time |
+| Mid-range CPU (4-6 cores, 2.5+ GHz) | **INT8-Lite** | `model_int8_lite/` | 8-12 threads | 1.5-2.0x real-time |
+| Older CPU (<4 cores) | **INT8-Lite** | `model_int8_lite/` | 4-8 threads | 1.2-1.5x real-time |
+| Limited memory/storage | **INT4** | `model_int4/` | 8 threads | 1.0-1.5x real-time |
+
 **Thread Scaling Analysis:**
-- INT8-Turbo: 1.66x (8 threads) → **2.12x (19 threads)** ✅ Benefits from more threads
-- INT8-Lite: 1.85x (8 threads) → 1.78x (19 threads) ⚠️ Slight regression
-- INT4: Slower with high thread counts due to memory bandwidth limits
+- **INT8-Turbo:** 1.66x (8 threads) → **2.12x (19 threads)** ✅ Benefits from more threads
+- **INT8-Lite:** 1.85x (8 threads) → 1.78x (19 threads) ⚠️ Slight regression with high threads
+- **INT4:** Slower with high thread counts due to memory bandwidth limits
 
-See [BENCHMARKS.md](BENCHMARKS.md) for detailed analysis.
+See [BENCHMARKS.md](BENCHMARKS.md) for detailed analysis and [BENCHMARK_COMPARISON.md](BENCHMARK_COMPARISON.md) for full comparison.
 
-### Performance Recommendations
-
-Based on real-world testing with optimal thread configuration:
-
-| Your Hardware | Recommended Model | Thread Count | Expected Performance |
-|---------------|-------------------|--------------|----------------------|
-| High-end CPU (8+ cores, 3+ GHz) | **INT8-Turbo** | 16-20 threads | 2.0-2.5x real-time |
-| Mid-range CPU (4-6 cores, 2.5+ GHz) | **INT8-Lite** | 8-12 threads | 1.5-2.0x real-time |
-| Older CPU (<4 cores) | **INT8-Lite** | 4-8 threads | 1.2-1.5x real-time |
-| Limited memory/storage | INT4 | 8 threads | 1.0-1.5x real-time* |
-
-*Note: INT4 doesn't scale well with high thread counts on this hardware
-
-**Benchmark your system:**
+**Run benchmarks on your system:**
 ```bash
 # Test with optimal threads for your CPU
-python benchmark_simple.py --model-dir model --threads 19
+python benchmark_simple.py --model-dir model --threads 16
 
-# Compare all models
+# Compare all available models
 python benchmark_all_models.py
 
-# Visual comparison
+# Visual comparison chart
 python compare_models.py
 ```
 
