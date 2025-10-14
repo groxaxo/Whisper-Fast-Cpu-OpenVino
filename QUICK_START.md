@@ -4,8 +4,8 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/groxaxo/Whisper-Fast-CPU-OpenVINO.git
-cd Whisper-Fast-CPU-OpenVINO
+git clone https://github.com/groxaxo/Whisper-Fast-Cpu-OpenVino.git
+cd Whisper-Fast-Cpu-OpenVino
 
 # Create conda environment
 conda env create -f environment.yml
@@ -112,9 +112,13 @@ pkill -f serve_whisper.py
 
 ## 📚 Documentation
 
-- **Precision Trimming:** See `TRIMMING_FIXED.md` ⭐ UPDATED!
-- **Upload & Trimming:** See `UPLOAD_GUIDE.md`
-- **Streaming Details:** See `STREAMING_GUIDE.md`
-- **Crash Fixes:** See `CRASH_FIX_SUMMARY.md`
-- **Technical Fixes:** See `FIXES.md`
+- **Performance Benchmarks:** See `BENCHMARKS.md` ⭐ NEW!
+- **Complete Guide:** See `README.md`
 - **Environment:** See `environment.yml`
+
+## 🚀 Performance
+
+**Tested on Intel i7-12700KF:**
+- **1.85x real-time** average speed
+- **3.30x real-time** on longer files
+- 1 minute of audio in ~32 seconds

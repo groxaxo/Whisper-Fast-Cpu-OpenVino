@@ -32,8 +32,8 @@ Real-time speech transcription and translation server powered by OpenAI's Whispe
 
 ```bash
 # Clone repository
-git clone https://github.com/groxaxo/Whisper-Fast-CPU-OpenVINO.git
-cd Whisper-Fast-CPU-OpenVINO
+git clone https://github.com/groxaxo/Whisper-Fast-Cpu-OpenVino.git
+cd Whisper-Fast-Cpu-OpenVino
 
 # Create conda environment
 conda env create -f environment.yml
@@ -278,10 +278,24 @@ File Upload → Trim (optional) → Process Button → OpenVINO Pipeline → Dis
 
 ## Performance
 
-- **CPU Mode:** ~1-2 seconds per second of audio (8 threads)
+### Benchmark Results (Intel i7-12700KF)
+
+- **Speed:** **1.85x real-time** average (processes audio 1.85x faster than playback)
+- **RTF:** 0.695x (Real-Time Factor - lower is better)
+- **Long files:** Up to **3.30x real-time** on 70+ second audio
+- **Throughput:** 1 minute of audio processed in ~32 seconds
 - **Memory:** ~1-2GB RAM for model + processing
-- **Streaming:** 3-second intervals for stability
 - **Accuracy:** Same as original Whisper large-v3
+
+See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance analysis and hardware recommendations.
+
+### Quick Performance Guide
+
+| CPU | Expected Speed | Use Case |
+|-----|----------------|----------|
+| 4 cores @ 2.0 GHz | 0.8-1.0x | Basic transcription |
+| 6 cores @ 3.0 GHz | 1.5-2.0x | Real-time streaming |
+| 8+ cores @ 3.5 GHz | 2.0-3.0x | Batch processing |
 
 ## Limitations
 
