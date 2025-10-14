@@ -11,13 +11,33 @@ cd Whisper-Fast-Cpu-OpenVino
 conda env create -f environment.yml
 conda activate ov-whisper
 
-# Start server
-./start_server.sh
+# Download model (auto or manual)
+python setup_model.py --auto  # Auto-downloads if HF CLI available
+# OR
+python setup_model.py         # Interactive selection
+
+# Start server (choose one)
+./start_server.sh         # Gradio web interface
+./start_openai_api.sh     # OpenAI-compatible API (for Open WebUI)
 ```
 
+**Model Options:**
+- **INT8-Turbo** (1.5GB) - Balanced speed/accuracy ⭐ Recommended for modern CPUs
+- **INT8-Lite** (1.5GB) - Optimized for older/weaker CPUs (<4 cores)
+- **INT4** (800MB) - Maximum speed, smallest size
+
+Run `python compare_models.py` for detailed comparison.
+
 ## 🌐 Access
+
+**Gradio Interface:**
 - **Local:** http://localhost:7860
 - **Remote:** `ngrok http 7860`
+
+**OpenAI API:** ⭐ **NEW!**
+- **Base URL:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+- **Compatible with:** Open WebUI, Continue, and other OpenAI API clients
 
 ## 🎤 Streaming Mode (NEW!)
 **Accumulates text as you speak - nothing gets deleted!**
@@ -34,7 +54,43 @@ conda activate ov-whisper
 - Real-time meetings
 - Continuous translation
 
-## 📁 Upload Mode (ENHANCED!)
+## 🔌 OpenAI API Mode ⭐ **NEW!**
+**Compatible with Open WebUI and other OpenAI API clients!**
+
+### Quick Test:
+```bash
+# Start the API server
+./start_openai_api.sh
+
+# Test with curl
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@sample.wav" \
+  -F "model=whisper-1" \
+  -F "language=en"
+```
+
+### Open WebUI Setup:
+1. Open Open WebUI settings
+2. Go to **Audio → STT Settings**
+3. Set **API Base URL:** `http://localhost:8000`
+4. Set **API Key:** any value (not validated)
+5. Set **Model:** `whisper-1`
+6. Save and test!
+
+### Python Example:
+```python
+import requests
+
+with open('audio.mp3', 'rb') as f:
+    response = requests.post(
+        'http://localhost:8000/v1/audio/transcriptions',
+        files={'file': f},
+        data={'model': 'whisper-1', 'language': 'en'}
+    )
+    print(response.json()['text'])
+```
+
+## 📁 Upload Mode (Gradio Interface)
 **Now with precision trimming controls!**
 
 1. Use **📁 Upload Audio (File)** input
@@ -118,7 +174,11 @@ pkill -f serve_whisper.py
 
 ## 🚀 Performance
 
-**Tested on Intel i7-12700KF:**
-- **1.85x real-time** average speed
-- **3.30x real-time** on longer files
-- 1 minute of audio in ~32 seconds
+**Tested on Intel i7-12700KF (12th Gen) with 19 threads:**
+- **INT8-Turbo:** 2.12x real-time ⭐ (fastest, recommended)
+- **INT8-Lite:** 1.78x real-time (good for long files)
+- **INT4:** 1.10x real-time (doesn't scale well)
+
+**Thread optimization matters!** INT8-Turbo gained 28% speed with 19 vs 8 threads.
+
+Run `python benchmark_simple.py --threads 19` to test on your system.

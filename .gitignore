@@ -43,11 +43,15 @@ server.log
 whisper_server.log
 
 # Model files (too large for git)
-model/*.bin
-model/*.xml
-model/tokenizer*
-model/preprocessor_config.json
-model/generation_config.json
+model/
+model_int4/
+model_int8_lite/
+*.bin
+*.xml
+
+# Benchmark results
+benchmark_results*.json
+benchmark_comparison*.json
 
 # Audio files
 *.wav

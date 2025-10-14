@@ -85,6 +85,40 @@ def parse_args() -> argparse.Namespace:
 @lru_cache(maxsize=1)
 def load_language_tokens(model_dir: str) -> Dict[str, str]:
     config_path = os.path.join(model_dir, "generation_config.json")
+    
+    # Check if file exists, if not attempt auto-download or provide helpful error message
+    if not os.path.exists(config_path):
+        LOGGER.warning(f"generation_config.json not found at: {config_path}")
+        LOGGER.info("Attempting auto-download...")
+        
+        # Try to auto-download
+        import subprocess
+        try:
+            result = subprocess.run(
+                [sys.executable, "setup_model.py", "--auto", "--target-dir", model_dir],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            
+            if result.returncode == 0 and os.path.exists(config_path):
+                LOGGER.info("Model downloaded successfully!")
+            else:
+                raise FileNotFoundError("Auto-download failed")
+                
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+            LOGGER.error(f"Auto-download failed: {e}")
+            LOGGER.error(f"Current working directory: {os.getcwd()}")
+            LOGGER.error(f"Model directory contents: {os.listdir(model_dir) if os.path.exists(model_dir) else 'Directory does not exist'}")
+            LOGGER.error("\nPlease ensure:")
+            LOGGER.error("1. You are running the script from the correct directory")
+            LOGGER.error("2. Download the model manually: python setup_model.py")
+            LOGGER.error("3. The model directory path is correct (use --model-dir to specify)")
+            raise FileNotFoundError(
+                f"Model configuration file not found: {config_path}\n"
+                f"Run 'python setup_model.py' to download the model, or check your --model-dir path."
+            )
+    
     with open(config_path, "r", encoding="utf-8") as config_file:
         data = json.load(config_file)
     language_tokens: Dict[str, str] = {}

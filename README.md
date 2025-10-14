@@ -12,19 +12,23 @@ Real-time speech transcription and translation server powered by OpenAI's Whispe
 
 ### Key Features
 
+- 🔌 **OpenAI API Compatible** - Drop-in replacement for OpenAI Whisper API (Open WebUI ready!)
 - 🎤 **Real-time streaming** - Live microphone transcription with text accumulation
 - 📁 **File upload** - Process pre-recorded audio with precision trimming (0.01s accuracy)
 - 🌍 **100+ languages** - Auto-detection or manual selection
 - 🔄 **Translation** - Translate any language to English in real-time
-- ⚡ **CPU optimized** - Fast inference using OpenVINO INT8 quantization
+- ⚡ **CPU optimized** - Fast inference using OpenVINO INT8/INT4 quantization
 - 🎯 **Precision trimming** - Extract exact audio segments by timestamp
 - 💾 **Memory efficient** - Stable for long sessions with automatic garbage collection
 
 ## Credits
 
 - **Original Whisper Model:** [OpenAI Whisper](https://github.com/openai/whisper) - State-of-the-art speech recognition
-- **OpenVINO Optimization:** [Intel OpenVINO](https://github.com/openvinotoolkit/openvino) - INT8 quantized model for fast CPU inference
-- **Model Weights:** [OpenVINO/whisper-large-v3-int8-ov](https://huggingface.co/OpenVINO/whisper-large-v3-int8-ov)
+- **OpenVINO Optimization:** [Intel OpenVINO](https://github.com/openvinotoolkit/openvino) - INT8/INT4 quantized models for fast CPU inference
+- **Model Weights:** 
+  - [OpenVINO/whisper-large-v3-turbo-int8-ov](https://huggingface.co/OpenVINO/whisper-large-v3-turbo-int8-ov) - Recommended
+  - [bweng/whisper-large-v3-turbo-int8-ov](https://huggingface.co/bweng/whisper-large-v3-turbo-int8-ov) - Optimized for weaker hardware
+  - [OpenVINO/whisper-large-v3-int4-ov](https://huggingface.co/OpenVINO/whisper-large-v3-int4-ov) - Maximum speed
 
 ## Quick Start
 
@@ -40,8 +44,40 @@ conda env create -f environment.yml
 conda activate ov-whisper
 ```
 
-### 2. Start Server
+### 2. Download Model
 
+**Automatic download** (if HuggingFace CLI available):
+```bash
+python setup_model.py --auto  # Auto-downloads recommended model
+```
+
+**Or choose manually:**
+
+```bash
+# Interactive setup
+python setup_model.py
+
+# Direct download
+python setup_model.py --model int8-turbo  # Recommended: balanced performance
+python setup_model.py --model int8-lite   # For weaker/older CPUs
+python setup_model.py --model int4        # Maximum speed, smallest size
+```
+
+**Model Comparison:**
+
+| Model | Size | Speed | Accuracy | Best For |
+|-------|------|-------|----------|----------|
+| **INT8-Turbo** ⭐ | 1.5 GB | 1.5-2.0x RT | 100% | Modern CPUs (4+ cores) |
+| **INT8-Lite** | 1.5 GB | 1.2-1.8x RT | 100% | Older/weaker CPUs (<4 cores) |
+| **INT4** | 800 MB | 2.0-3.0x RT | ~96% | Maximum speed, embedded systems |
+
+*RT = Real-Time (e.g., 2.0x means 1 minute audio processed in 30 seconds)*
+
+Run `python compare_models.py` for detailed comparison.
+
+### 3. Start Server
+
+**Option A: Gradio Interface (Web UI)**
 ```bash
 # Easy start
 ./start_server.sh
@@ -50,10 +86,26 @@ conda activate ov-whisper
 python serve_whisper.py --device CPU --port 7860
 ```
 
-### 3. Access Interface
+**Option B: OpenAI-Compatible API** ⭐ **NEW!**
+```bash
+# Start OpenAI-compatible API (for Open WebUI, etc.)
+./start_openai_api.sh
 
+# Or manual start
+python serve_openai_api.py --device CPU --port 8000
+```
+
+### 4. Access Interface
+
+**Gradio Interface:**
 - **Local:** http://localhost:7860
 - **Remote:** Use `ngrok http 7860` for external access
+
+**OpenAI API:**
+- **Base URL:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+- **Endpoints:** `/v1/audio/transcriptions`, `/v1/audio/translations`
+- **Compatible with:** Open WebUI, Continue, and other OpenAI API clients
 
 ## Usage
 
@@ -86,6 +138,42 @@ python serve_whisper.py --device CPU --port 7860
 | Skip 10s intro | 10 | (empty) | 0:10 to end |
 | Middle section | 45.5 | 120.75 | 75.25 seconds |
 | Precise clip | 123.45 | 125.67 | Exactly 2.22s |
+
+### OpenAI API Mode ⭐ **NEW!**
+
+Use the OpenAI-compatible API with any client that supports the OpenAI Whisper API format.
+
+**Python Example:**
+```python
+import requests
+
+# Transcribe audio
+with open('audio.mp3', 'rb') as f:
+    response = requests.post(
+        'http://localhost:8000/v1/audio/transcriptions',
+        files={'file': f},
+        data={'model': 'whisper-1', 'language': 'en'}
+    )
+    print(response.json()['text'])
+```
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@audio.mp3" \
+  -F "model=whisper-1" \
+  -F "language=en"
+```
+
+**Open WebUI Integration:**
+1. Open your Open WebUI settings
+2. Go to Audio → STT Settings
+3. Set API Base URL: `http://localhost:8000`
+4. Set API Key: any value (not validated)
+5. Model: `whisper-1`
+6. Save and test!
+
+**Perfect for:** Open WebUI, Continue, Cursor, any OpenAI-compatible client
 
 ## Supported Languages
 
@@ -278,24 +366,58 @@ File Upload → Trim (optional) → Process Button → OpenVINO Pipeline → Dis
 
 ## Performance
 
-### Benchmark Results (Intel i7-12700KF)
+### Benchmark Results (Intel i7-12700KF, 12th Gen, 19 Threads)
 
-- **Speed:** **1.85x real-time** average (processes audio 1.85x faster than playback)
-- **RTF:** 0.695x (Real-Time Factor - lower is better)
-- **Long files:** Up to **3.30x real-time** on 70+ second audio
-- **Throughput:** 1 minute of audio processed in ~32 seconds
-- **Memory:** ~1-2GB RAM for model + processing
-- **Accuracy:** Same as original Whisper large-v3
+Real-world benchmark with 84 seconds of test audio across three files:
 
-See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance analysis and hardware recommendations.
+| Model | Avg Speed | RTF | Processing Time | Memory | Accuracy |
+|-------|-----------|-----|-----------------|--------|----------|
+| **INT8-Turbo** ⭐ | **2.12x RT** | 0.49x | 33.8s / 84s | ~2.0 GB | 100% |
+| **INT8-Lite** | 1.78x RT | 0.66x | 35.5s / 84s | ~1.8 GB | 100% |
+| **INT4** | 1.10x RT | 1.51x | 59.7s / 84s | ~1.5 GB | ~96% |
 
-### Quick Performance Guide
+**RTF** = Real-Time Factor (lower is better)  
+**Speed** = Processing speed multiplier (higher is better)
 
-| CPU | Expected Speed | Use Case |
-|-----|----------------|----------|
-| 4 cores @ 2.0 GHz | 0.8-1.0x | Basic transcription |
-| 6 cores @ 3.0 GHz | 1.5-2.0x | Real-time streaming |
-| 8+ cores @ 3.5 GHz | 2.0-3.0x | Batch processing |
+**Key Findings:**
+- **INT8-Turbo** is the fastest with 19 threads: processes 1 minute in ~28 seconds
+- **INT8-Lite** performs well on long files (2.84x on 70s audio)
+- **INT4** surprisingly slower - doesn't scale well with high thread counts
+- Both INT8 models maintain 100% accuracy (same as original Whisper)
+- Thread scaling: INT8-Turbo gains 28% speed with 19 vs 8 threads
+- Stable memory usage during processing
+
+**Thread Scaling Analysis:**
+- INT8-Turbo: 1.66x (8 threads) → **2.12x (19 threads)** ✅ Benefits from more threads
+- INT8-Lite: 1.85x (8 threads) → 1.78x (19 threads) ⚠️ Slight regression
+- INT4: Slower with high thread counts due to memory bandwidth limits
+
+See [BENCHMARKS.md](BENCHMARKS.md) for detailed analysis.
+
+### Performance Recommendations
+
+Based on real-world testing with optimal thread configuration:
+
+| Your Hardware | Recommended Model | Thread Count | Expected Performance |
+|---------------|-------------------|--------------|----------------------|
+| High-end CPU (8+ cores, 3+ GHz) | **INT8-Turbo** | 16-20 threads | 2.0-2.5x real-time |
+| Mid-range CPU (4-6 cores, 2.5+ GHz) | **INT8-Lite** | 8-12 threads | 1.5-2.0x real-time |
+| Older CPU (<4 cores) | **INT8-Lite** | 4-8 threads | 1.2-1.5x real-time |
+| Limited memory/storage | INT4 | 8 threads | 1.0-1.5x real-time* |
+
+*Note: INT4 doesn't scale well with high thread counts on this hardware
+
+**Benchmark your system:**
+```bash
+# Test with optimal threads for your CPU
+python benchmark_simple.py --model-dir model --threads 19
+
+# Compare all models
+python benchmark_all_models.py
+
+# Visual comparison
+python compare_models.py
+```
 
 ## Limitations
 

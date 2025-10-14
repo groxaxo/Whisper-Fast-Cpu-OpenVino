@@ -59,7 +59,7 @@ def benchmark_with_api(audio_path, duration):
     return processing_time
 
 
-def benchmark_direct(audio_path, duration):
+def benchmark_direct(audio_path, duration, model_dir="model", threads=8):
     """Benchmark using direct pipeline"""
     import numpy as np
     import openvino_genai as ov_genai
@@ -80,10 +80,10 @@ def benchmark_direct(audio_path, duration):
     
     # Load pipeline
     config = {
-        "INFERENCE_NUM_THREADS": "8",
+        "INFERENCE_NUM_THREADS": str(threads),
         "PERFORMANCE_HINT": "THROUGHPUT"
     }
-    pipeline = ov_genai.WhisperPipeline("model", "CPU", **config)
+    pipeline = ov_genai.WhisperPipeline(model_dir, "CPU", **config)
     
     # Warm up
     warmup_data = audio_array[:16000].tolist()
@@ -102,7 +102,26 @@ def benchmark_direct(audio_path, duration):
     return processing_time, transcript
 
 
+def get_model_info(model_dir="model"):
+    """Get model information from MODEL_INFO.txt or config"""
+    info_file = Path(model_dir) / "MODEL_INFO.txt"
+    if info_file.exists():
+        with open(info_file, 'r') as f:
+            content = f.read()
+            for line in content.split('\n'):
+                if line.startswith('Model:'):
+                    return line.split(':', 1)[1].strip()
+    return "whisper-large-v3 (unknown quantization)"
+
+
 def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Benchmark Whisper models")
+    parser.add_argument('--model-dir', default='model', help='Model directory (default: model)')
+    parser.add_argument('--threads', type=int, default=8, help='Number of CPU threads (default: 8)')
+    args = parser.parse_args()
+    
     # Test files
     test_files = [
         ("/home/op/ov-whisper/sample.wav", "Sample"),
@@ -117,13 +136,16 @@ def main():
         print("No test files found!")
         sys.exit(1)
     
+    model_name = get_model_info(args.model_dir)
+    
     print(f"\n{'#'*70}")
     print(f"# Whisper-Fast-CPU-OpenVINO Benchmark")
     print(f"{'#'*70}")
     print(f"\nConfiguration:")
-    print(f"  Model: whisper-large-v3-int8-ov (INT8 quantized)")
+    print(f"  Model: {model_name}")
+    print(f"  Model Directory: {args.model_dir}")
     print(f"  Device: CPU")
-    print(f"  Threads: 8")
+    print(f"  Threads: {args.threads}")
     print(f"  Test files: {len(test_files)}")
     
     results = []
@@ -144,7 +166,7 @@ def main():
             print(f"\nProcessing...")
             
             # Benchmark
-            processing_time, transcript = benchmark_direct(audio_file, duration)
+            processing_time, transcript = benchmark_direct(audio_file, duration, args.model_dir, args.threads)
             
             rtf = processing_time / duration
             speed = duration / processing_time
@@ -201,13 +223,14 @@ def main():
         print(f"  ✓ 1 minute of audio processed in ~{60/avg_speed:.1f} seconds")
         
         # Save results
-        output_file = "benchmark_results.json"
+        output_file = f"benchmark_results_{model_name.replace(' ', '_').replace('/', '_')}.json"
         with open(output_file, 'w') as f:
             json.dump({
                 "cpu_info": "Intel Core i7-12700KF (12th Gen)",
-                "model": "whisper-large-v3-int8-ov",
+                "model": model_name,
+                "model_directory": args.model_dir,
                 "device": "CPU",
-                "threads": 8,
+                "threads": args.threads,
                 "summary": {
                     "files_processed": len(results),
                     "total_audio_seconds": round(total_audio, 2),
