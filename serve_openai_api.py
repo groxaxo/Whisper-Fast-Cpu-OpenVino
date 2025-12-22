@@ -76,7 +76,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--device",
         default="CPU",
-        help="Target device for OpenVINO execution (default: CPU)."
+        choices=["CPU", "GPU", "AUTO"],
+        help="Target device for OpenVINO execution (default: CPU). Use GPU for Intel Iris Xe graphics, AUTO for automatic selection."
     )
     parser.add_argument(
         "--host",
@@ -132,16 +133,31 @@ def build_pipeline(
     streams: Union[str, int]
 ) -> ov_genai.WhisperPipeline:
     """Build OpenVINO Whisper pipeline"""
-    extra_kwargs: Dict[str, Union[str, int]] = {
-        "INFERENCE_NUM_THREADS": threads,
-        "PERFORMANCE_HINT": "THROUGHPUT",
-    }
-    if streams:
-        extra_kwargs["NUM_STREAMS"] = streams
+    extra_kwargs: Dict[str, Union[str, int]] = {}
+    
+    # CPU-specific optimizations
+    if device == "CPU":
+        extra_kwargs["INFERENCE_NUM_THREADS"] = threads
+        extra_kwargs["PERFORMANCE_HINT"] = "THROUGHPUT"
+        if streams:
+            extra_kwargs["NUM_STREAMS"] = streams
+    # GPU-specific optimizations (Intel Iris Xe, etc.)
+    elif device == "GPU":
+        extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"
+        # GPU doesn't use CPU threads, but streams can improve throughput
+        if streams:
+            extra_kwargs["NUM_STREAMS"] = streams
+        # Enable GPU throttling for better stability on integrated graphics
+        extra_kwargs["GPU_THROUGHPUT_STREAMS"] = 1 if streams == "AUTO" else streams
+    # AUTO mode - let OpenVINO decide
+    else:  # AUTO
+        extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"
+        if streams:
+            extra_kwargs["NUM_STREAMS"] = streams
 
     LOGGER.info(
         "Loading Whisper pipeline (device=%s, threads=%d, streams=%s)",
-        device, threads, streams
+        device, threads if device == "CPU" else 0, streams
     )
     return ov_genai.WhisperPipeline(model_dir, device, **extra_kwargs)
 

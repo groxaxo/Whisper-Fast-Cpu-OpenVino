@@ -17,7 +17,8 @@ Real-time speech transcription and translation server powered by OpenAI's Whispe
 - 📁 **File upload** - Process pre-recorded audio with precision trimming (0.01s accuracy)
 - 🌍 **100+ languages** - Auto-detection or manual selection
 - 🔄 **Translation** - Translate any language to English in real-time
-- ⚡ **CPU optimized** - Fast inference using OpenVINO INT8/INT4 quantization
+- ⚡ **CPU/GPU optimized** - Fast inference using OpenVINO INT8/INT4 quantization on CPU or Intel GPU
+- 🎮 **Intel Iris Xe support** - GPU acceleration for 12th Gen+ Intel CPUs with integrated graphics
 - 🎯 **Precision trimming** - Extract exact audio segments by timestamp
 - 💾 **Memory efficient** - Stable for long sessions with automatic garbage collection
 
@@ -79,23 +80,73 @@ Run `python compare_models.py` for detailed comparison.
 
 **Option A: Gradio Interface (Web UI)**
 ```bash
-# Easy start
+# Easy start (CPU)
 ./start_server.sh
 
-# Or manual start
+# With Intel Iris Xe GPU acceleration
+DEVICE=GPU ./start_server.sh
+
+# Auto-detect best device
+DEVICE=AUTO ./start_server.sh
+
+# Or manual start with specific device
 python serve_whisper.py --device CPU --port 7860
+python serve_whisper.py --device GPU --port 7860  # For Intel Iris Xe
 ```
 
 **Option B: OpenAI-Compatible API** ⭐ **NEW!**
 ```bash
-# Start OpenAI-compatible API (for Open WebUI, etc.)
+# Start OpenAI-compatible API (CPU)
 ./start_openai_api.sh
+
+# With Intel Iris Xe GPU acceleration
+DEVICE=GPU ./start_openai_api.sh
 
 # Or manual start
 python serve_openai_api.py --device CPU --port 8000
+python serve_openai_api.py --device GPU --port 8000  # For Intel Iris Xe
 ```
 
-### 4. Access Interface
+### 4. Intel Iris Xe GPU Support 🎮 **NEW!**
+
+**Supported Hardware:**
+- Intel 12th Gen (Alder Lake) - Core i5-1240P and similar
+- Intel 13th Gen (Raptor Lake)
+- Intel 14th Gen (Meteor Lake)
+- Intel Arc discrete GPUs
+
+**GPU Driver Requirements:**
+
+**Linux (Ubuntu 22.04/24.04):**
+```bash
+# Install Intel GPU drivers
+sudo apt update
+sudo apt install -y intel-opencl-icd intel-level-zero-gpu
+
+# Verify GPU is detected
+clinfo | grep "Intel"
+```
+
+**Windows 10/11:**
+- Install latest Intel Graphics Driver from [Intel Download Center](https://www.intel.com/content/www/us/en/download-center/home.html)
+- Windows Update typically includes compatible drivers
+
+**Performance Notes:**
+- GPU mode uses LATENCY hint for optimal real-time performance
+- Best for: Real-time streaming, low-latency applications
+- CPU mode uses THROUGHPUT hint for batch processing
+- For Intel i5-1240P: GPU mode can provide 1.2-1.8x speedup for short audio clips
+- CPU mode is still recommended for long audio files (>5 minutes)
+
+**Troubleshooting GPU:**
+```bash
+# Check if GPU is available
+python -c "import openvino as ov; print(ov.Core().available_devices())"
+
+# Should show: ['CPU', 'GPU', 'GPU.0']
+```
+
+### 5. Access Interface
 
 **Gradio Interface:**
 - **Local:** http://localhost:7860
@@ -309,8 +360,11 @@ See [OpenVINO optimization guide](https://docs.openvino.ai/2025/openvino-workflo
 
 - **Python:** 3.11+
 - **OpenVINO:** 2025.2.0+
+- **OpenVINO GenAI:** 2025.2.0+
 - **Optimum Intel:** 1.23.0+ (optional)
 - **OS:** Linux, macOS, Windows
+- **GPU (optional):** Intel Iris Xe (12th Gen+), Intel Arc, or other Intel integrated/discrete GPUs
+- **GPU Drivers:** Intel OpenCL runtime and Level Zero drivers for GPU acceleration
 
 
 ## Configuration
@@ -321,10 +375,10 @@ See [OpenVINO optimization guide](https://docs.openvino.ai/2025/openvino-workflo
 python serve_whisper.py [OPTIONS]
 
 Options:
-  --device DEVICE          Target device (default: CPU)
+  --device DEVICE          Target device: CPU, GPU, or AUTO (default: CPU)
   --port PORT             Server port (default: 7860)
   --host HOST             Server host (default: 0.0.0.0)
-  --threads THREADS       CPU threads (default: 8)
+  --threads THREADS       CPU threads (default: 8, used only for CPU device)
   --model-dir PATH        Model directory (default: ./model)
   --segment-seconds SEC   Audio segment length (default: 30.0)
   --streams STREAMS       Parallel inference streams (default: AUTO)
@@ -336,10 +390,10 @@ Options:
 python serve_openai_api.py [OPTIONS]
 
 Options:
-  --device DEVICE          Target device (default: CPU)
+  --device DEVICE          Target device: CPU, GPU, or AUTO (default: CPU)
   --port PORT             Server port (default: 8000)
   --host HOST             Server host (default: 0.0.0.0)
-  --threads THREADS       CPU threads (default: 8)
+  --threads THREADS       CPU threads (default: 8, used only for CPU device)
   --model-dir PATH        Model directory (default: ./model)
   --streams STREAMS       Parallel inference streams (default: AUTO)
 ```
@@ -349,22 +403,34 @@ Options:
 You can run any of the three available models by specifying the `--model-dir`:
 
 ```bash
-# INT8-Turbo (default, fastest on modern CPUs)
-python serve_openai_api.py --model-dir model --threads 16
+# INT8-Turbo (default, fastest on modern CPUs/GPUs)
+python serve_openai_api.py --model-dir model --device CPU --threads 16
+python serve_openai_api.py --model-dir model --device GPU  # Intel Iris Xe
 
 # INT8-Lite (optimized for older/weaker CPUs)
-python serve_openai_api.py --model-dir model_int8_lite --threads 8
+python serve_openai_api.py --model-dir model_int8_lite --device CPU --threads 8
 
 # INT4 (smallest size, good for embedded systems)
-python serve_openai_api.py --model-dir model_int4 --threads 8
+python serve_openai_api.py --model-dir model_int4 --device CPU --threads 8
 ```
 
 ### Performance Tuning
 
-- **Threads:** Adjust `--threads` based on your CPU (8-20 recommended)
+**For CPU (Intel i5-1240P):**
+- **Threads:** 12-16 for P-cores and E-cores combined (default: 8)
 - **Streams:** Use `AUTO` or set manually for parallel processing
+- **Model:** INT8-Turbo for best performance
+
+**For GPU (Intel Iris Xe):**
+- **Device:** `--device GPU` for GPU acceleration
+- **Streams:** Use `AUTO` or `1` for integrated graphics
+- **Model:** INT8-Turbo recommended
+- **Best for:** Real-time streaming, low-latency tasks (<5 min audio)
+
+**General:**
 - **Streaming interval:** 3 seconds (optimized for stability in Gradio)
 - **Memory:** Automatic garbage collection prevents buildup
+- **Device selection:** Use `AUTO` to let OpenVINO choose optimal device
 
 ## Architecture
 
@@ -437,18 +503,23 @@ python compare_models.py
 Test each model individually:
 
 ```bash
-# Test INT8-Turbo
-python serve_openai_api.py --model-dir model --threads 16 &
+# Test INT8-Turbo on CPU
+python serve_openai_api.py --model-dir model --device CPU --threads 16 &
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@sample.wav" -F "model=whisper-1"
+
+# Test INT8-Turbo on GPU (Intel Iris Xe)
+python serve_openai_api.py --model-dir model --device GPU &
 curl -X POST http://localhost:8000/v1/audio/transcriptions \
   -F "file=@sample.wav" -F "model=whisper-1"
 
 # Test INT8-Lite
-python serve_openai_api.py --model-dir model_int8_lite --threads 8 &
+python serve_openai_api.py --model-dir model_int8_lite --device CPU --threads 8 &
 curl -X POST http://localhost:8000/v1/audio/transcriptions \
   -F "file=@sample.wav" -F "model=whisper-1"
 
 # Test INT4
-python serve_openai_api.py --model-dir model_int4 --threads 8 &
+python serve_openai_api.py --model-dir model_int4 --device CPU --threads 8 &
 curl -X POST http://localhost:8000/v1/audio/transcriptions \
   -F "file=@sample.wav" -F "model=whisper-1"
 ```
@@ -457,6 +528,9 @@ curl -X POST http://localhost:8000/v1/audio/transcriptions \
 
 | Issue | Solution |
 |-------|----------|
+| GPU not detected | Install Intel GPU drivers: `sudo apt install intel-opencl-icd intel-level-zero-gpu` (Linux) or update graphics driver (Windows) |
+| GPU device error | Check available devices: `python -c "import openvino as ov; print(ov.Core().available_devices())"` |
+| GPU slower than CPU | Use CPU mode for longer files (>5 min), GPU is optimized for real-time/streaming |
 | Port already in use | Run `pkill -f serve_whisper` or `pkill -f serve_openai_api` |
 | Server crashes | Check `server.log` or `api_server.log` for errors |
 | No transcription | Verify audio input levels and format (16kHz recommended) |
