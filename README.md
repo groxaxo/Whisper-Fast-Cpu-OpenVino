@@ -31,6 +31,16 @@ Real-time speech transcription and translation server powered by OpenAI's Whispe
   - [bweng/whisper-large-v3-turbo-int8-ov](https://huggingface.co/bweng/whisper-large-v3-turbo-int8-ov) - Optimized for weaker hardware
   - [OpenVINO/whisper-large-v3-int4-ov](https://huggingface.co/OpenVINO/whisper-large-v3-int4-ov) - Maximum speed
 
+## Hardware Compatibility
+
+This implementation is fully compatible with:
+- **Intel 12th Gen (Alder Lake)** - Core i5-1240P, i7-1260P, i9-12900H, etc. with Iris Xe graphics
+- **Intel 13th Gen (Raptor Lake)** - All models with integrated or discrete Intel GPUs
+- **Intel 14th Gen (Meteor Lake)** - Latest processors with Intel Arc graphics
+- **Older Intel CPUs** - Full CPU support for 6th Gen and newer
+
+📘 **See [Intel i5-1240P Setup Guide](INTEL_1240P_SETUP.md)** for detailed hardware-specific instructions.
+
 ## Quick Start
 
 ### 1. Installation
