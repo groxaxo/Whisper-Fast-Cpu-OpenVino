@@ -15,6 +15,6 @@ dependencies:
     - numpy>=1.24.0
     - datasets
     - huggingface_hub
-    - openvino>=2024.5.0
-    - openvino-tokenizers
-    - openvino-genai
+    - openvino>=2025.2.0
+    - openvino-tokenizers>=2025.2.0
+    - openvino-genai>=2025.2.0

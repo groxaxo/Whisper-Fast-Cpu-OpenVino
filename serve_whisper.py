@@ -53,7 +53,12 @@ def parse_args() -> argparse.Namespace:
         default="model",
         help="Path to the exported OpenVINO Whisper model directory (default: ./model).",
     )
-    parser.add_argument("--device", default="CPU", help="Target device for OpenVINO execution (default: CPU).")
+    parser.add_argument(
+        "--device", 
+        default="CPU", 
+        choices=["CPU", "GPU", "AUTO"],
+        help="Target device for OpenVINO execution (default: CPU). Use GPU for Intel Iris Xe graphics, AUTO for automatic selection.",
+    )
     parser.add_argument("--host", default="0.0.0.0", help="Host/IP for the Gradio server bind (default: 0.0.0.0).")
     parser.add_argument("--port", type=int, default=7860, help="Port for the Gradio server (default: 7860).")
     parser.add_argument(
@@ -129,17 +134,30 @@ def load_language_tokens(model_dir: str) -> Dict[str, str]:
 
 
 def build_pipeline(model_dir: str, device: str, threads: int, streams: Union[str, int]) -> ov_genai.WhisperPipeline:
-    extra_kwargs: Dict[str, Union[str, int]] = {
-        "INFERENCE_NUM_THREADS": threads,
-        "PERFORMANCE_HINT": "THROUGHPUT",
-    }
-    if streams:
-        extra_kwargs["NUM_STREAMS"] = streams
+    extra_kwargs: Dict[str, Union[str, int]] = {}
+    
+    # CPU-specific optimizations
+    if device == "CPU":
+        extra_kwargs["INFERENCE_NUM_THREADS"] = threads
+        extra_kwargs["PERFORMANCE_HINT"] = "THROUGHPUT"
+        if streams:
+            extra_kwargs["NUM_STREAMS"] = streams
+    # GPU-specific optimizations (Intel Iris Xe, etc.)
+    elif device == "GPU":
+        extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"
+        # GPU streams can improve throughput for parallel requests
+        if streams:
+            extra_kwargs["NUM_STREAMS"] = streams
+    # AUTO mode - let OpenVINO decide
+    else:  # AUTO
+        extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"
+        if streams:
+            extra_kwargs["NUM_STREAMS"] = streams
 
     LOGGER.info(
         "Loading Whisper pipeline (device=%s, threads=%d, streams=%s, performance_hint=%s)",
         device,
-        threads,
+        threads if device == "CPU" else 0,
         streams,
         extra_kwargs.get("PERFORMANCE_HINT"),
     )
