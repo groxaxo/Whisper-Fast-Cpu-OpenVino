@@ -34,8 +34,10 @@ fi
 # Kill any existing server on the port
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1 ; then
     echo -e "${YELLOW}Port $PORT is in use, stopping existing server...${NC}"
-    pkill -f "serve_openai_api.py" || true
-    sleep 2
+    if pgrep -f "serve_openai_api.py" > /dev/null; then
+        pkill -f "serve_openai_api.py"
+        sleep 2
+    fi
 fi
 
 # Display device-specific information

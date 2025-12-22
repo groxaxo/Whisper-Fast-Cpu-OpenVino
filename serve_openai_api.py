@@ -144,11 +144,9 @@ def build_pipeline(
     # GPU-specific optimizations (Intel Iris Xe, etc.)
     elif device == "GPU":
         extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"
-        # GPU doesn't use CPU threads, but streams can improve throughput
+        # GPU streams can improve throughput for parallel requests
         if streams:
             extra_kwargs["NUM_STREAMS"] = streams
-        # Enable GPU throttling for better stability on integrated graphics
-        extra_kwargs["GPU_THROUGHPUT_STREAMS"] = 1 if streams == "AUTO" else streams
     # AUTO mode - let OpenVINO decide
     else:  # AUTO
         extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"

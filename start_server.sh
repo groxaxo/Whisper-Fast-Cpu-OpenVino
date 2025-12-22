@@ -7,8 +7,10 @@ PORT="${PORT:-7860}"
 
 # Kill any existing server processes
 echo "Stopping any existing servers..."
-pkill -f "serve_whisper.py" || true
-sleep 2
+if pgrep -f "serve_whisper.py" > /dev/null; then
+    pkill -f "serve_whisper.py"
+    sleep 2
+fi
 
 # Start the server
 echo "Starting OpenVINO Whisper server on $DEVICE..."
