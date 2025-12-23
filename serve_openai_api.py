@@ -258,13 +258,23 @@ async def transcribe_audio(
         kwargs = {"return_timestamps": timestamp_granularities == "segment"}
         kwargs["task"] = "transcribe"
 
-        # Set language if specified, otherwise use server_config or auto-detect
-        effective_language = language or server_config.language
+        # Ignore client language parameter to allow auto-detection
+        # This fixes issues where clients (like Open WebUI) send a default language (e.g., 'en')
+        # which forces Whisper to translate instead of transcribe.
+        if language:
+            LOGGER.info(f"Ignoring client language request: '{language}', using auto-detection")
+        
+        # Always use auto-detection (passed as None/None to kwargs logic below)
+        effective_language = None
+        
+        # Note: If you want to respect server_config.language, uncomment the line below instead:
+        # effective_language = server_config.language 
+
         if effective_language and effective_language != "auto":
             whisper_token = language_tokens.get(effective_language)
             if whisper_token:
                 kwargs["language"] = whisper_token
-                LOGGER.info(f"Using language: {effective_language}")
+                LOGGER.info(f"Using server-configured language: {effective_language}")
             else:
                 LOGGER.warning(f"Unknown language code: {effective_language}, using auto-detect")
         else:

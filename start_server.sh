@@ -33,7 +33,7 @@ fi
 # - Threads=8: Use all P-core hyperthreads for max parallelism
 # - Streams=1: Single stream for lowest latency per request
 # - Hint=LATENCY: Optimize for response time
-taskset -c 0-7 python serve_openai_api.py \
+taskset -c 0-7 /home/op/miniconda/envs/ov-whisper/bin/python serve_openai_api.py \
     --model-dir "$MODEL_DIR" \
     --device "$DEVICE" \
     --threads "$THREADS" \
