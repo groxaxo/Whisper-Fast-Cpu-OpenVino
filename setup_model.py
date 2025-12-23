@@ -21,30 +21,20 @@ except ImportError:
 AVAILABLE_MODELS = {
     "int8-turbo": {
         "name": "whisper-large-v3-turbo-int8",
-        "repo_id": "OpenVINO/whisper-large-v3-turbo-int8-ov",
+        "repo_id": "bweng/whisper-large-v3-turbo-int8-ov",
         "description": "Whisper Large V3 Turbo with INT8 quantization (balanced speed/accuracy)",
-        "size": "~1.5 GB",
-        "speed": "Fast (1.5-2.0x real-time)",
+        "size": "~1.0 GB",
+        "speed": "Very Fast (5-7x real-time on i5-1240P)",
         "accuracy": "High",
         "recommended": True,
-        "hardware": "Medium to High-end CPUs",
-    },
-    "int8-lite": {
-        "name": "whisper-large-v3-turbo-int8-lite",
-        "repo_id": "bweng/whisper-large-v3-turbo-int8-ov",
-        "description": "Whisper Large V3 Turbo INT8 optimized for weaker hardware",
-        "size": "~1.5 GB",
-        "speed": "Moderate (1.2-1.8x real-time)",
-        "accuracy": "High",
-        "recommended": False,
-        "hardware": "Low to Medium-end CPUs",
+        "hardware": "Intel 12th Gen+ CPUs (optimized for hybrid P/E cores)",
     },
     "int4": {
         "name": "whisper-large-v3-int4",
         "repo_id": "OpenVINO/whisper-large-v3-int4-ov",
-        "description": "Whisper Large V3 with INT4 quantization (maximum speed)",
-        "size": "~800 MB",
-        "speed": "Very Fast (2.0-3.0x real-time)",
+        "description": "Whisper Large V3 with INT4 quantization (maximum speed, smaller size)",
+        "size": "~600 MB",
+        "speed": "Fastest (may have slight quality trade-off)",
         "accuracy": "Good (slight degradation vs INT8)",
         "recommended": False,
         "hardware": "All CPUs (especially resource-constrained)",
@@ -205,13 +195,12 @@ def interactive_setup():
     
     print("=" * 70)
     print("\nSelect a model to download:")
-    print("  1 - INT8 Turbo (Recommended - balanced speed/accuracy, high-end CPUs)")
-    print("  2 - INT8 Lite (Optimized for weaker hardware)")
-    print("  3 - INT4 (Maximum speed, smallest size)")
+    print("  1 - INT8 Turbo (Recommended - best speed/accuracy for modern Intel CPUs)")
+    print("  2 - INT4 (Maximum speed, smallest size, slight quality trade-off)")
     print("  q - Quit")
     print()
     
-    choice = input("Enter your choice (1/2/3/q): ").strip().lower()
+    choice = input("Enter your choice (1/2/q): ").strip().lower()
     
     if choice == 'q':
         print("Aborted.")
@@ -219,8 +208,7 @@ def interactive_setup():
     
     model_map = {
         '1': 'int8-turbo',
-        '2': 'int8-lite',
-        '3': 'int4',
+        '2': 'int4',
     }
     
     if choice not in model_map:
@@ -229,10 +217,11 @@ def interactive_setup():
     
     model_key = model_map[choice]
     
-    # Ask for custom directory
-    print(f"\nDefault installation directory: ./model")
+    # Ask for custom directory - default to model_int8_turbo for int8
+    default_dir = "model_int8_turbo" if model_key == "int8-turbo" else "model_int4"
+    print(f"\nDefault installation directory: ./{default_dir}")
     custom_dir = input("Press Enter to use default, or enter custom path: ").strip()
-    target_dir = custom_dir if custom_dir else "model"
+    target_dir = custom_dir if custom_dir else default_dir
     
     return download_model(model_key, target_dir)
 
@@ -259,13 +248,13 @@ Examples:
     
     parser.add_argument(
         '--model',
-        choices=['int8-turbo', 'int8-lite', 'int4'],
-        help='Model to download (int8-turbo, int8-lite, or int4)'
+        choices=['int8-turbo', 'int4'],
+        help='Model to download (int8-turbo or int4)'
     )
     parser.add_argument(
         '--target-dir',
-        default='model',
-        help='Target directory for model files (default: model)'
+        default='model_int8_turbo',
+        help='Target directory for model files (default: model_int8_turbo)'
     )
     parser.add_argument(
         '--list',

@@ -16,7 +16,6 @@ from typing import Dict, Optional, Union
 
 import numpy as np
 import torch
-import torchaudio
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -30,7 +29,7 @@ LOGGER = logging.getLogger("serve_openai_api")
 app = FastAPI(
     title="OpenVINO Whisper API",
     description="OpenAI-compatible Whisper API using OpenVINO",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Global variables for model
@@ -40,6 +39,7 @@ language_tokens: Dict[str, str] = {}
 
 class TranscriptionResponse(BaseModel):
     """OpenAI transcription response format"""
+
     text: str
     task: Optional[str] = None
     language: Optional[str] = None
@@ -77,24 +77,24 @@ def parse_args() -> argparse.Namespace:
         "--device",
         default="CPU",
         choices=["CPU", "GPU", "AUTO"],
-        help="Target device for OpenVINO execution (default: CPU). Use GPU for Intel Iris Xe graphics, AUTO for automatic selection."
+        help="Target device for OpenVINO execution (default: CPU). Use GPU for Intel Iris Xe graphics, AUTO for automatic selection.",
     )
     parser.add_argument(
         "--host",
         default="0.0.0.0",
-        help="Host/IP for the API server bind (default: 0.0.0.0)."
+        help="Host/IP for the API server bind (default: 0.0.0.0).",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8000,
-        help="Port for the API server (default: 8000)."
+        help="Port for the API server (default: 8000).",
     )
     parser.add_argument(
         "--threads",
         type=int,
         default=min(8, os.cpu_count() or 1),
-        help="Number of CPU threads to dedicate to inference."
+        help="Number of CPU threads to dedicate to inference.",
     )
     parser.add_argument(
         "--streams",
@@ -102,60 +102,65 @@ def parse_args() -> argparse.Namespace:
         default="AUTO",
         help="Number of parallel inference streams (integer or AUTO).",
     )
+    parser.add_argument(
+        "--hint",
+        default="LATENCY",
+        choices=["LATENCY", "THROUGHPUT"],
+        help="Performance hint for OpenVINO (LATENCY or THROUGHPUT, default: LATENCY).",
+    )
     return parser.parse_args()
 
 
 def load_language_tokens(model_dir: str) -> Dict[str, str]:
     """Load language tokens from model config"""
     config_path = os.path.join(model_dir, "generation_config.json")
-    
+
     if not os.path.exists(config_path):
         raise FileNotFoundError(
             f"Model configuration file not found: {config_path}\n"
             f"Run 'python setup_model.py' to download the model."
         )
-    
+
     with open(config_path, "r", encoding="utf-8") as config_file:
         data = json.load(config_file)
-    
+
     language_tokens: Dict[str, str] = {}
     for token in data.get("lang_to_id", {}):
         plain = token.strip("<|>")
         language_tokens[plain] = token
-    
+
     return language_tokens
 
 
 def build_pipeline(
-    model_dir: str,
-    device: str,
-    threads: int,
-    streams: Union[str, int]
+    model_dir: str, device: str, threads: int, streams: Union[str, int], hint: str
 ) -> ov_genai.WhisperPipeline:
     """Build OpenVINO Whisper pipeline"""
     extra_kwargs: Dict[str, Union[str, int]] = {}
-    
+
     # CPU-specific optimizations
     if device == "CPU":
         extra_kwargs["INFERENCE_NUM_THREADS"] = threads
-        extra_kwargs["PERFORMANCE_HINT"] = "THROUGHPUT"
+        extra_kwargs["PERFORMANCE_HINT"] = hint
         if streams:
             extra_kwargs["NUM_STREAMS"] = streams
     # GPU-specific optimizations (Intel Iris Xe, etc.)
     elif device == "GPU":
-        extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"
+        extra_kwargs["PERFORMANCE_HINT"] = hint
         # GPU streams can improve throughput for parallel requests
         if streams:
             extra_kwargs["NUM_STREAMS"] = streams
     # AUTO mode - let OpenVINO decide
     else:  # AUTO
-        extra_kwargs["PERFORMANCE_HINT"] = "LATENCY"
+        extra_kwargs["PERFORMANCE_HINT"] = hint
         if streams:
             extra_kwargs["NUM_STREAMS"] = streams
 
     LOGGER.info(
         "Loading Whisper pipeline (device=%s, threads=%d, streams=%s)",
-        device, threads if device == "CPU" else 0, streams
+        device,
+        threads if device == "CPU" else 0,
+        streams,
     )
     return ov_genai.WhisperPipeline(model_dir, device, **extra_kwargs)
 
@@ -166,31 +171,33 @@ def load_audio_file(file_data: bytes) -> tuple[np.ndarray, int]:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as tmp_file:
         tmp_file.write(file_data)
         tmp_path = tmp_file.name
-    
+
     try:
-        # Load audio using torchaudio
-        waveform, sample_rate = torchaudio.load(tmp_path)
-        
+        # Load audio using soundfile (more reliable than torchaudio)
+        import soundfile as sf
+
+        audio_array, sample_rate = sf.read(tmp_path)
+
         # Convert to mono if needed
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
-        
+        if len(audio_array.shape) > 1:
+            audio_array = audio_array.mean(axis=1)
+
         # Resample if needed
         if sample_rate != TARGET_SAMPLE_RATE:
-            waveform = torchaudio.functional.resample(
-                waveform, sample_rate, TARGET_SAMPLE_RATE
+            import librosa
+
+            audio_array = librosa.resample(
+                audio_array, orig_sr=sample_rate, target_sr=TARGET_SAMPLE_RATE
             )
-        
-        # Convert to numpy
-        audio_array = waveform.squeeze().numpy()
-        
+            sample_rate = TARGET_SAMPLE_RATE
+
         # Normalize
         max_abs = float(np.max(np.abs(audio_array))) if audio_array.size else 0.0
         if max_abs > 1.0:
             audio_array = audio_array / max_abs
-        
-        return audio_array.astype(np.float32), TARGET_SAMPLE_RATE
-        
+
+        return audio_array.astype(np.float32), sample_rate
+
     finally:
         # Clean up temp file
         if os.path.exists(tmp_path):
@@ -205,32 +212,32 @@ async def transcribe_audio(
     prompt: Optional[str] = Form(None),
     response_format: str = Form("json"),
     temperature: float = Form(0.0),
-    timestamp_granularities: Optional[str] = Form(None)
+    timestamp_granularities: Optional[str] = Form(None),
 ):
     """
     OpenAI-compatible transcription endpoint.
-    
+
     Transcribes audio to text in the same language.
     Compatible with Open WebUI and other OpenAI API clients.
     """
     try:
         # Read file data
         file_data = await file.read()
-        
+
         if not file_data:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
-        
+
         # Load and process audio
         LOGGER.info(f"Processing file: {file.filename} ({len(file_data)} bytes)")
         audio_array, sample_rate = load_audio_file(file_data)
-        
+
         duration = len(audio_array) / float(sample_rate)
         LOGGER.info(f"Audio duration: {duration:.2f}s, sample_rate: {sample_rate}")
-        
+
         # Prepare generation kwargs
         kwargs = {"return_timestamps": timestamp_granularities == "segment"}
         kwargs["task"] = "transcribe"
-        
+
         # Set language if specified
         if language and language != "auto":
             whisper_token = language_tokens.get(language)
@@ -238,40 +245,42 @@ async def transcribe_audio(
                 kwargs["language"] = whisper_token
             else:
                 LOGGER.warning(f"Unknown language code: {language}, using auto-detect")
-        
+
         # Run inference
         start_time = time.time()
         audio_data = audio_array.tolist()
         result = pipeline.generate(audio_data, **kwargs)
         inference_time = time.time() - start_time
-        
+
         # Extract text
         text = result.texts[0].strip() if result.texts else ""
-        
+
         LOGGER.info(
             f"Transcription completed: {len(text)} chars, "
-            f"took {inference_time:.2f}s ({duration/inference_time:.2f}x realtime)"
+            f"took {inference_time:.2f}s ({duration / inference_time:.2f}x realtime)"
         )
-        
+
         # Build response
         response_data = {
             "text": text,
             "task": "transcribe",
             "language": language or "auto",
-            "duration": duration
+            "duration": duration,
         }
-        
+
         # Add segments if requested
-        if timestamp_granularities == "segment" and hasattr(result, 'chunks'):
+        if timestamp_granularities == "segment" and hasattr(result, "chunks"):
             segments = []
             for chunk in result.chunks:
-                segments.append({
-                    "start": float(chunk.start_ts),
-                    "end": float(chunk.end_ts),
-                    "text": chunk.text.strip()
-                })
+                segments.append(
+                    {
+                        "start": float(chunk.start_ts),
+                        "end": float(chunk.end_ts),
+                        "text": chunk.text.strip(),
+                    }
+                )
             response_data["segments"] = segments
-        
+
         # Return different formats
         if response_format == "text":
             return text
@@ -279,7 +288,7 @@ async def transcribe_audio(
             return JSONResponse(content=response_data)
         else:  # json (default)
             return JSONResponse(content={"text": text})
-        
+
     except Exception as e:
         LOGGER.exception("Transcription failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -291,53 +300,52 @@ async def translate_audio(
     model: str = Form("whisper-1"),
     prompt: Optional[str] = Form(None),
     response_format: str = Form("json"),
-    temperature: float = Form(0.0)
+    temperature: float = Form(0.0),
 ):
     """
     OpenAI-compatible translation endpoint.
-    
+
     Translates audio to English text.
     Compatible with Open WebUI and other OpenAI API clients.
     """
     try:
         # Read file data
         file_data = await file.read()
-        
+
         if not file_data:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
-        
+
         # Load and process audio
         LOGGER.info(f"Translating file: {file.filename} ({len(file_data)} bytes)")
         audio_array, sample_rate = load_audio_file(file_data)
-        
+
         duration = len(audio_array) / float(sample_rate)
-        
+
         # Prepare generation kwargs
         kwargs = {"return_timestamps": False}
         kwargs["task"] = "translate"
-        
+
         # Run inference
         start_time = time.time()
         audio_data = audio_array.tolist()
         result = pipeline.generate(audio_data, **kwargs)
         inference_time = time.time() - start_time
-        
+
         # Extract text
         text = result.texts[0].strip() if result.texts else ""
-        
+
         LOGGER.info(
-            f"Translation completed: {len(text)} chars, "
-            f"took {inference_time:.2f}s"
+            f"Translation completed: {len(text)} chars, took {inference_time:.2f}s"
         )
-        
+
         # Build response
         response_data = {
             "text": text,
             "task": "translate",
             "language": "en",
-            "duration": duration
+            "duration": duration,
         }
-        
+
         # Return different formats
         if response_format == "text":
             return text
@@ -345,7 +353,7 @@ async def translate_audio(
             return JSONResponse(content=response_data)
         else:  # json (default)
             return JSONResponse(content={"text": text})
-        
+
     except Exception as e:
         LOGGER.exception("Translation failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -361,19 +369,16 @@ async def list_models():
                 "id": "whisper-1",
                 "object": "model",
                 "created": int(time.time()),
-                "owned_by": "openvino"
+                "owned_by": "openvino",
             }
-        ]
+        ],
     }
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "model_loaded": pipeline is not None
-    }
+    return {"status": "healthy", "model_loaded": pipeline is not None}
 
 
 @app.get("/")
@@ -386,49 +391,46 @@ async def root():
             "transcribe": "/v1/audio/transcriptions",
             "translate": "/v1/audio/translations",
             "models": "/v1/models",
-            "health": "/health"
+            "health": "/health",
         },
-        "compatible_with": "OpenAI Whisper API, Open WebUI"
+        "compatible_with": "OpenAI Whisper API, Open WebUI",
     }
 
 
 def main() -> None:
     """Main entry point"""
     global pipeline, language_tokens
-    
+
     args = parse_args()
-    
+
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         stream=sys.stdout,
     )
-    
+
     # Set thread environment variables
     os.environ.setdefault("OMP_NUM_THREADS", str(args.threads))
     os.environ.setdefault("OPENBLAS_NUM_THREADS", str(args.threads))
     os.environ.setdefault("MKL_NUM_THREADS", str(args.threads))
     os.environ.setdefault("NUMEXPR_NUM_THREADS", str(args.threads))
     os.environ.setdefault("OV_CPU_THREADS_NUM", str(args.threads))
-    
+
     # Load model
     LOGGER.info(f"Loading model from: {args.model_dir}")
     language_tokens = load_language_tokens(args.model_dir)
-    pipeline = build_pipeline(args.model_dir, args.device, args.threads, args.streams)
+    pipeline = build_pipeline(args.model_dir, args.device, args.threads, args.streams, args.hint)
     LOGGER.info("Model loaded successfully!")
-    
+
     # Start server
     LOGGER.info(f"Starting OpenAI-compatible API server on {args.host}:{args.port}")
     LOGGER.info(f"API Documentation: http://{args.host}:{args.port}/docs")
-    LOGGER.info(f"Compatible with Open WebUI - use http://{args.host}:{args.port} as base URL")
-    
-    uvicorn.run(
-        app,
-        host=args.host,
-        port=args.port,
-        log_level="info"
+    LOGGER.info(
+        f"Compatible with Open WebUI - use http://{args.host}:{args.port} as base URL"
     )
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":
