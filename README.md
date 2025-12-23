@@ -20,9 +20,27 @@ Tested on **Intel Core i5-1240P** (12 physical cores):
 - **Latency**: <1 second for typical queries
 - **Memory**: ~500-800 MB
 
-## 🚀 Quick Start (Automated)
+## 🚀 Quick Start
 
-### 1. Clone and Setup
+### Automated Setup (Recommended)
+
+**One command to install everything:**
+```bash
+git clone https://github.com/groxaxo/Whisper-Fast-Cpu-OpenVino.git
+cd Whisper-Fast-Cpu-OpenVino
+./setup.sh
+```
+
+The script will:
+- ✅ Install system dependencies
+- ✅ Create conda environment
+- ✅ Install Python packages
+- ✅ Download INT8 Turbo model
+- ✅ Test the installation
+- ✅ Optionally setup auto-start service
+
+### Manual Setup
+
 ```bash
 git clone https://github.com/groxaxo/Whisper-Fast-Cpu-OpenVino.git
 cd Whisper-Fast-Cpu-OpenVino
@@ -35,14 +53,14 @@ conda activate ov-whisper
 python setup_model.py --model int8-turbo
 ```
 
-### 2. Start Server
+### Start Server
 ```bash
 ./start_server.sh
 ```
 
 Server runs on `http://localhost:8000` 🎉
 
-### 3. Test It Works
+### Test It Works
 ```bash
 # Check health
 curl http://localhost:8000/health
