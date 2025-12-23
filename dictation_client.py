@@ -18,14 +18,20 @@ from tkinter import font as tkfont
 import sounddevice as sd
 import numpy as np
 import requests
-from pynput import keyboard, mouse
+import evdev
+from pynput import mouse
+from pynput.keyboard import Controller, Key
 from scipy.io.wavfile import write as write_wav
 
 # Configuration
 SAMPLE_RATE = 16000
 CHANNELS = 1
 API_URL = "http://localhost:8000/v1/audio/transcriptions"
-HOTKEY = {keyboard.Key.ctrl, keyboard.Key.alt, keyboard.Key.space}
+# evdev Key Codes
+EV_CTRL = {evdev.ecodes.KEY_LEFTCTRL, evdev.ecodes.KEY_RIGHTCTRL}
+EV_ALT = {evdev.ecodes.KEY_LEFTALT, evdev.ecodes.KEY_RIGHTALT}
+EV_SPACE = {evdev.ecodes.KEY_SPACE}
+HOTKEY_CODES = EV_CTRL | EV_ALT | EV_SPACE
 
 # Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -80,32 +86,61 @@ class DictationClient:
         self.recording = False
         self.audio_queue = queue.Queue()
         self.audio_data = []
-        self.current_keys = set()
-        self.keyboard_controller = keyboard.Controller()
+        self.keyboard_controller = Controller()
         
         self.root = root
         self.overlay = StatusOverlay(root)
         
     def start_listeners(self):
-        # Start keyboard listener in non-blocking mode
-        self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
-        self.listener.start()
-        
+        self.listener_thread = threading.Thread(target=self._evdev_listener_loop, daemon=True)
+        self.listener_thread.start()
         logger.info("Dictation client started. Press Ctrl+Alt+Space to record.")
 
-    def on_press(self, key):
-        if key in HOTKEY:
-            self.current_keys.add(key)
-            if self.current_keys == HOTKEY:
-                # Schedule toggle in main thread
-                self.root.after_idle(self.toggle_recording)
-        
-    def on_release(self, key):
+    def _evdev_listener_loop(self):
+        import select
         try:
-            self.current_keys.remove(key)
-        except KeyError:
-            pass
+            devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+            keyboards = []
+            for device in devices:
+                try:
+                    caps = device.capabilities()
+                    if evdev.ecodes.EV_KEY in caps:
+                        if evdev.ecodes.KEY_SPACE in caps[evdev.ecodes.EV_KEY]:
+                            keyboards.append(device)
+                except Exception:
+                    continue
+            
+            if not keyboards:
+                logger.error("No keyboards found or permission denied!")
+                logger.error("Run: sudo usermod -aG input $USER && logout")
+                return
 
+            logger.info(f"Monitoring keyboards: {[k.name for k in keyboards]}")
+            
+            held_ctrl = False
+            held_alt = False
+            held_space = False
+
+            while True:
+                # Use select to wait for events from any keyboard
+                r, w, x = select.select(keyboards, [], [])
+                for dev in r:
+                    for event in dev.read():
+                        if event.type == evdev.ecodes.EV_KEY:
+                            key_event = evdev.categorize(event)
+                            code = key_event.scancode
+                            is_down = (key_event.keystate != evdev.events.KeyEvent.key_up)
+                            
+                            if code in EV_CTRL: held_ctrl = is_down
+                            elif code in EV_ALT: held_alt = is_down
+                            elif code in EV_SPACE: held_space = is_down
+                            
+                            if held_ctrl and held_alt and held_space:
+                                if key_event.keystate == evdev.events.KeyEvent.key_down:
+                                    logger.info("Hotkey detected!")
+                                    self.root.after_idle(self.toggle_recording)
+        except Exception as e:
+            logger.error(f"Listener error: {e}")
     def toggle_recording(self):
         if not self.recording:
             self.start_recording()

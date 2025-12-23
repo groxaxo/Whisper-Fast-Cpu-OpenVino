@@ -1,0 +1,26 @@
+[Unit]
+Description=OpenVINO Whisper API Server
+After=network.target
+
+[Service]
+Type=simple
+User=op
+WorkingDirectory=/home/op/Whisper-Fast-Cpu-OpenVino
+# Environment variables for optional configuration
+Environment=MODEL_DIR=model_int8_turbo
+Environment=DEVICE=CPU
+Environment=PORT=8000
+Environment=THREADS=8
+# Execute using taskset for CPU pinning to P-cores (0-7)
+ExecStart=/usr/bin/taskset -c 0-7 /home/op/miniconda/envs/ov-whisper/bin/python serve_openai_api.py \
+    --model-dir ${MODEL_DIR} \
+    --device ${DEVICE} \
+    --threads ${THREADS} \
+    --streams 1 \
+    --hint LATENCY \
+    --port ${PORT}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

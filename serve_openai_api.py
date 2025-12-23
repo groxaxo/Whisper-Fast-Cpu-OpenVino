@@ -16,8 +16,9 @@ from typing import Dict, Optional, Union
 
 import numpy as np
 import torch
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Header, Depends
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import uvicorn
 import openvino_genai as ov_genai
@@ -32,9 +33,28 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Security (optional bearer token)
+security = HTTPBearer(auto_error=False)
+
 # Global variables for model
 pipeline: Optional[ov_genai.WhisperPipeline] = None
 language_tokens: Dict[str, str] = {}
+
+# Server configuration state
+class ServerConfig(BaseModel):
+    """Server configuration state"""
+    engine: str = "whisper"
+    model: str = "whisper-1"
+    model_dir: str = "model"
+    device: str = "CPU"
+    vad_filter: bool = False
+    language: Optional[str] = None
+    threads: int = 8
+    streams: Union[str, int] = "AUTO"
+    hint: str = "LATENCY"
+
+# Global configuration instance
+server_config = ServerConfig()
 
 
 class TranscriptionResponse(BaseModel):
@@ -238,13 +258,17 @@ async def transcribe_audio(
         kwargs = {"return_timestamps": timestamp_granularities == "segment"}
         kwargs["task"] = "transcribe"
 
-        # Set language if specified
-        if language and language != "auto":
-            whisper_token = language_tokens.get(language)
+        # Set language if specified, otherwise use server_config or auto-detect
+        effective_language = language or server_config.language
+        if effective_language and effective_language != "auto":
+            whisper_token = language_tokens.get(effective_language)
             if whisper_token:
                 kwargs["language"] = whisper_token
+                LOGGER.info(f"Using language: {effective_language}")
             else:
-                LOGGER.warning(f"Unknown language code: {language}, using auto-detect")
+                LOGGER.warning(f"Unknown language code: {effective_language}, using auto-detect")
+        else:
+            LOGGER.info("Using automatic language detection")
 
         # Run inference
         start_time = time.time()
@@ -378,7 +402,106 @@ async def list_models():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "model_loaded": pipeline is not None}
+    return {"status": "ok", "model_loaded": pipeline is not None}
+
+
+@app.get("/config")
+async def get_config(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    """
+    Get current server configuration.
+    
+    Compatible with Open-WebUI configuration queries.
+    """
+    return {
+        "engine": server_config.engine,
+        "model": server_config.model,
+        "vad_filter": server_config.vad_filter,
+        "language": server_config.language,
+        "device": server_config.device,
+        "threads": server_config.threads,
+        "streams": server_config.streams,
+        "hint": server_config.hint,
+    }
+
+
+@app.post("/config/update")
+async def update_config(
+    config_update: dict,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+):
+    """
+    Update server configuration dynamically.
+    
+    Compatible with Open-WebUI configuration updates.
+    Accepts JSON body with configuration parameters.
+    """
+    global server_config
+    
+    try:
+        # Update configuration fields
+        if "engine" in config_update:
+            server_config.engine = config_update["engine"]
+        if "model" in config_update:
+            server_config.model = config_update["model"]
+        if "vad_filter" in config_update:
+            server_config.vad_filter = config_update["vad_filter"]
+        if "language" in config_update:
+            server_config.language = config_update["language"]
+        if "device" in config_update:
+            server_config.device = config_update["device"]
+        if "threads" in config_update:
+            server_config.threads = config_update["threads"]
+        if "streams" in config_update:
+            server_config.streams = config_update["streams"]
+        if "hint" in config_update:
+            server_config.hint = config_update["hint"]
+        
+        LOGGER.info(f"Configuration updated: {config_update}")
+        
+        return {
+            "status": "success",
+            "message": "Configurations updated successfully.",
+            "config": {
+                "engine": server_config.engine,
+                "model": server_config.model,
+                "vad_filter": server_config.vad_filter,
+                "language": server_config.language,
+            }
+        }
+    except Exception as e:
+        LOGGER.exception("Configuration update failed")
+        raise HTTPException(status_code=500, detail=f"Configuration update failed: {str(e)}")
+
+
+# Alternate routes without /v1 prefix (for Open-WebUI compatibility)
+@app.post("/audio/transcriptions")
+async def transcribe_audio_alt(
+    file: UploadFile = File(...),
+    model: str = Form("whisper-1"),
+    language: Optional[str] = Form(None),
+    prompt: Optional[str] = Form(None),
+    response_format: str = Form("json"),
+    temperature: float = Form(0.0),
+    timestamp_granularities: Optional[str] = Form(None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    """Alternate transcription endpoint without /v1 prefix"""
+    # Delegate to main endpoint
+    return await transcribe_audio(file, model, language, prompt, response_format, temperature, timestamp_granularities)
+
+
+@app.post("/audio/translations")
+async def translate_audio_alt(
+    file: UploadFile = File(...),
+    model: str = Form("whisper-1"),
+    prompt: Optional[str] = Form(None),
+    response_format: str = Form("json"),
+    temperature: float = Form(0.0),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    """Alternate translation endpoint without /v1 prefix"""
+    # Delegate to main endpoint
+    return await translate_audio(file, model, prompt, response_format, temperature)
 
 
 @app.get("/")
@@ -388,18 +511,25 @@ async def root():
         "name": "OpenVINO Whisper API",
         "version": "1.0.0",
         "endpoints": {
-            "transcribe": "/v1/audio/transcriptions",
-            "translate": "/v1/audio/translations",
+            "transcribe": "/v1/audio/transcriptions or /audio/transcriptions",
+            "translate": "/v1/audio/translations or /audio/translations",
             "models": "/v1/models",
+            "config": "/config",
+            "config_update": "/config/update",
             "health": "/health",
         },
         "compatible_with": "OpenAI Whisper API, Open WebUI",
+        "current_config": {
+            "engine": server_config.engine,
+            "model": server_config.model,
+            "language": server_config.language or "auto-detect",
+        }
     }
 
 
 def main() -> None:
     """Main entry point"""
-    global pipeline, language_tokens
+    global pipeline, language_tokens, server_config
 
     args = parse_args()
 
@@ -409,6 +539,13 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
         stream=sys.stdout,
     )
+
+    # Initialize server configuration with command-line args
+    server_config.model_dir = args.model_dir
+    server_config.device = args.device
+    server_config.threads = args.threads
+    server_config.streams = args.streams
+    server_config.hint = args.hint
 
     # Set thread environment variables
     os.environ.setdefault("OMP_NUM_THREADS", str(args.threads))
