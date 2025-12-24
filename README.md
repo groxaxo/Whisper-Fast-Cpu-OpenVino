@@ -416,11 +416,12 @@ Auto-detection works for 99+ languages. Manual selection supports:
 - Russian (`ru`)
 - And many more...
 
-## 📖 Advanced Documentation
+## 📖 Documentation
 
-For detailed information:
+**Main Documentation:**
+- **[README.md](README.md)** - Main documentation, quick start, and features
 - **[OPEN_WEBUI_INTEGRATION.md](OPEN_WEBUI_INTEGRATION.md)** - Complete Open-WebUI integration guide
-- **API Docs**: `http://localhost:8000/docs` (when server is running)
+- **API Docs**: `http://localhost:8000/docs` (interactive documentation when server is running)
 
 ## 🤝 Contributing
 
