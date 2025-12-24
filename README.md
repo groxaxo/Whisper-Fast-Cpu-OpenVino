@@ -1,3 +1,9 @@
+```
+╦ ╦┬ ┬┬┌─┐┌─┐┌─┐┬─┐  ╔═╗┌─┐┌─┐┌┬┐  ╔═╗╔═╗╦ ╦  ╔═╗┌─┐┌─┐┌┐┌╦  ╦╦╔╗╗╔═╗
+║║║├─┤│└─┐├─┘├┤ ├┬┘  ╠╣ ├─┤└─┐ │───║  ╠═╝║ ║  ║ ║├─┘├┤ │││╚╗╔╝║║║║║ ║
+╚╩╝┴ ┴┴└─┘┴  └─┘┴└─  ╚  ┴ ┴└─┘ ┴   ╚═╝╩  ╚═╝  ╚═╝┴  └─┘┘└┘ ╚╝ ╩╝╚╝╚═╝
+```
+
 # Whisper-Fast-CPU-OpenVINO
 
 ⚡ **Fast, local speech-to-text** using OpenVINO on CPU with OpenAI-compatible API and Open-WebUI integration.

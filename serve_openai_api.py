@@ -17,7 +17,7 @@ from typing import Dict, Optional, Union
 import numpy as np
 import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Header, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import uvicorn
@@ -514,12 +514,400 @@ async def translate_audio_alt(
     return await translate_audio(file, model, prompt, response_format, temperature)
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint with API information"""
+    """Root endpoint with beautiful HTML landing page"""
+    html_content = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisper Fast CPU OpenVINO - Speech to Text API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .banner {
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            line-height: 1.2;
+            white-space: pre;
+            margin-bottom: 20px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .status {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        
+        .status h2 {
+            color: #10b981;
+            margin-bottom: 10px;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .feature-card {
+            background: #f9fafb;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        
+        .endpoints {
+            background: #1f2937;
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        
+        .endpoints h2 {
+            color: #60a5fa;
+            margin-bottom: 20px;
+        }
+        
+        .endpoint {
+            background: #374151;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .endpoint-method {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 0.9em;
+        }
+        
+        .endpoint-method.post {
+            background: #3b82f6;
+        }
+        
+        .endpoint-path {
+            color: #60a5fa;
+        }
+        
+        .endpoint-desc {
+            color: #9ca3af;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        
+        .config-info {
+            background: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .config-info h3 {
+            color: #f59e0b;
+            margin-bottom: 15px;
+        }
+        
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #fde68a;
+        }
+        
+        .config-item:last-child {
+            border-bottom: none;
+        }
+        
+        .config-label {
+            font-weight: 600;
+            color: #92400e;
+        }
+        
+        .config-value {
+            color: #d97706;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .quick-start {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .quick-start h3 {
+            color: #3b82f6;
+            margin-bottom: 15px;
+        }
+        
+        .code-block {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+        
+        .footer {
+            background: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            color: #6b7280;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 768px) {
+            .banner {
+                font-size: 6px;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="banner">╦ ╦┬ ┬┬┌─┐┌─┐┌─┐┬─┐  ╔═╗┌─┐┌─┐┌┬┐  ╔═╗╔═╗╦ ╦  ╔═╗┌─┐┌─┐┌┐┌╦  ╦╦╔╗╔╔═╗
+║║║├─┤│└─┐├─┘├┤ ├┬┘  ╠╣ ├─┤└─┐ │───║  ╠═╝║ ║  ║ ║├─┘├┤ │││╚╗╔╝║║║║║ ║
+╚╩╝┴ ┴┴└─┘┴  └─┘┴└─  ╚  ┴ ┴└─┘ ┴   ╚═╝╩  ╚═╝  ╚═╝┴  └─┘┘└┘ ╚╝ ╩╝╚╝╚═╝</div>
+            <h1>Speech to Text API</h1>
+            <p class="subtitle">⚡ Fast, Local, Private | OpenAI Compatible</p>
+        </div>
+        
+        <div class="content">
+            <div class="status">
+                <h2>✅ Server is Running</h2>
+                <p><strong>Status:</strong> Online and ready to transcribe</p>
+                <p><strong>Version:</strong> 1.0.0</p>
+            </div>
+            
+            <div class="config-info">
+                <h3>⚙️ Current Configuration</h3>
+                <div class="config-item">
+                    <span class="config-label">Engine:</span>
+                    <span class="config-value">""" + server_config.engine + """</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Model:</span>
+                    <span class="config-value">""" + server_config.model + """</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Language:</span>
+                    <span class="config-value">""" + (server_config.language or "auto-detect") + """</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Device:</span>
+                    <span class="config-value">""" + server_config.device + """</span>
+                </div>
+            </div>
+            
+            <h2 style="margin-bottom: 20px;">🌟 Key Features</h2>
+            <div class="features">
+                <div class="feature-card">
+                    <h3>🚀 Fast CPU Inference</h3>
+                    <p>Optimized for Intel CPUs using OpenVINO. Get 6-10x realtime performance with low latency.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎯 OpenAI Compatible</h3>
+                    <p>Drop-in replacement for OpenAI Whisper API. Works with existing tools and integrations.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🌐 Open-WebUI Ready</h3>
+                    <p>Full support for Open-WebUI voice input. Easy setup with dynamic configuration.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔒 100% Local</h3>
+                    <p>All processing happens on your machine. Your audio never leaves your computer.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🧠 Smart Language Detection</h3>
+                    <p>Automatically detects the language being spoken. Supports 99+ languages.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ Multiple Formats</h3>
+                    <p>Supports MP3, WAV, M4A, FLAC, OGG, and WebM audio files.</p>
+                </div>
+            </div>
+            
+            <div class="endpoints">
+                <h2>📡 API Endpoints</h2>
+                
+                <div class="endpoint">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/v1/audio/transcriptions</span>
+                    <div class="endpoint-desc">Transcribe audio to text (OpenAI compatible)</div>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/v1/audio/translations</span>
+                    <div class="endpoint-desc">Translate audio to English text</div>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-path">/v1/models</span>
+                    <div class="endpoint-desc">List available models</div>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-path">/config</span>
+                    <div class="endpoint-desc">Get current server configuration</div>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/config/update</span>
+                    <div class="endpoint-desc">Update server settings on-the-fly</div>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-path">/health</span>
+                    <div class="endpoint-desc">Check server health status</div>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-path">/docs</span>
+                    <div class="endpoint-desc">Interactive API documentation (Swagger UI)</div>
+                </div>
+            </div>
+            
+            <div class="quick-start">
+                <h3>🚀 Quick Test</h3>
+                <p>Test the transcription endpoint with a simple curl command:</p>
+                <div class="code-block">curl -X POST "http://localhost:8000/v1/audio/transcriptions" \\
+  -F "file=@your_audio.mp3" \\
+  -F "model=whisper-1"</div>
+            </div>
+            
+            <div class="quick-start">
+                <h3>🌐 Use with Open-WebUI</h3>
+                <p>Configure Open-WebUI to use this server:</p>
+                <ol style="margin-left: 20px; margin-top: 10px;">
+                    <li>Open <strong>Settings → Audio</strong> in Open-WebUI</li>
+                    <li>Set <strong>STT Engine</strong> to <code>OpenAI</code></li>
+                    <li>Set <strong>API Base URL</strong> to <code>http://localhost:8000/v1</code></li>
+                    <li>Set <strong>Model</strong> to <code>whisper-1</code></li>
+                    <li>Click <strong>Save</strong> and start using voice input!</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Whisper-Fast-CPU-OpenVINO</strong> | Made with ❤️ for fast, private, local speech recognition</p>
+            <p style="margin-top: 10px;">
+                <a href="/docs" target="_blank">API Documentation</a> | 
+                <a href="/health">Health Check</a> | 
+                <a href="https://github.com/groxaxo/Whisper-Fast-Cpu-OpenVino" target="_blank">GitHub</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/api/info")
+async def api_info():
+    """JSON API information endpoint"""
     return {
         "name": "OpenVINO Whisper API",
         "version": "1.0.0",
+        "status": "online",
         "endpoints": {
             "transcribe": "/v1/audio/transcriptions or /audio/transcriptions",
             "translate": "/v1/audio/translations or /audio/translations",
@@ -527,14 +915,27 @@ async def root():
             "config": "/config",
             "config_update": "/config/update",
             "health": "/health",
+            "docs": "/docs",
         },
-        "compatible_with": "OpenAI Whisper API, Open WebUI",
+        "compatible_with": ["OpenAI Whisper API", "Open WebUI"],
         "current_config": {
             "engine": server_config.engine,
             "model": server_config.model,
             "language": server_config.language or "auto-detect",
+            "device": server_config.device,
         }
     }
+
+
+def print_banner():
+    """Print ASCII banner on startup"""
+    banner = """
+╦ ╦┬ ┬┬┌─┐┌─┐┌─┐┬─┐  ╔═╗┌─┐┌─┐┌┬┐  ╔═╗╔═╗╦ ╦  ╔═╗┌─┐┌─┐┌┐┌╦  ╦╦╔╗╔╔═╗
+║║║├─┤│└─┐├─┘├┤ ├┬┘  ╠╣ ├─┤└─┐ │───║  ╠═╝║ ║  ║ ║├─┘├┤ │││╚╗╔╝║║║║║ ║
+╚╩╝┴ ┴┴└─┘┴  └─┘┴└─  ╚  ┴ ┴└─┘ ┴   ╚═╝╩  ╚═╝  ╚═╝┴  └─┘┘└┘ ╚╝ ╩╝╚╝╚═╝
+⚡ Fast, Local Speech-to-Text on CPU | OpenAI API Compatible
+"""
+    print(banner)
 
 
 def main() -> None:
@@ -549,6 +950,9 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
         stream=sys.stdout,
     )
+    
+    # Print banner
+    print_banner()
 
     # Initialize server configuration with command-line args
     server_config.model_dir = args.model_dir
