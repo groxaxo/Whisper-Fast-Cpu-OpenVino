@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -20,51 +21,45 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Environments
+.env
+.venv
+env/
 venv/
 ENV/
-env/
-.venv
+env.bak/
+venv.bak/
 
-# Conda
-.conda/
-.cache/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
-*.log
-server.log
-whisper_server.log
-
-# Model files (too large for git)
+# Project specific
 model/
-model_int4/
-model_int8_lite/
-*.bin
-*.xml
-
-# Benchmark results
-benchmark_results*.json
-benchmark_comparison*.json
-
-# Audio files
+model_*/
+*.log
+*.log.*
+*.backup
+*.tmp
 *.wav
 *.mp3
-*.m4a
-*.flac
-*.ogg
-sample.wav
 
-# OS
-.DS_Store
-Thumbs.db
+# IDES
+.vscode/
+.idea/
 
-# Temporary files
-*.tmp
-*.bak
+# Large files
+test_audio.mp3

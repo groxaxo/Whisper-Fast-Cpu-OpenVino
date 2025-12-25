@@ -87,6 +87,9 @@ class DictationClient:
         self.audio_queue = queue.Queue()
         self.audio_data = []
         self.keyboard_controller = Controller()
+        self.last_hotkey_time = 0
+        self.hotkey_debounce = 0.3  # 300ms debounce
+        self.toggle_lock = threading.Lock()
         
         self.root = root
         self.overlay = StatusOverlay(root)
@@ -137,17 +140,24 @@ class DictationClient:
                             
                             if held_ctrl and held_alt and held_space:
                                 if key_event.keystate == evdev.events.KeyEvent.key_down:
-                                    logger.info("Hotkey detected!")
-                                    self.root.after_idle(self.toggle_recording)
+                                    # Debounce: prevent multiple triggers
+                                    current_time = time.time()
+                                    if current_time - self.last_hotkey_time > self.hotkey_debounce:
+                                        self.last_hotkey_time = current_time
+                                        logger.info("Hotkey detected!")
+                                        self.root.after_idle(self.toggle_recording)
         except Exception as e:
             logger.error(f"Listener error: {e}")
+    
     def toggle_recording(self):
-        if not self.recording:
-            self.start_recording()
-        else:
-            # We need to run the stop/transcribe logic in a thread to keep UI responsive
-            # but updates back to UI must happen in main thread
-             threading.Thread(target=self.stop_recording_and_transcribe).start()
+        # Use lock to prevent race conditions
+        with self.toggle_lock:
+            if not self.recording:
+                self.start_recording()
+            else:
+                # We need to run the stop/transcribe logic in a thread to keep UI responsive
+                # but updates back to UI must happen in main thread
+                threading.Thread(target=self.stop_recording_and_transcribe).start()
 
     def start_recording(self):
         self.recording = True
