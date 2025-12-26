@@ -257,6 +257,7 @@ async def transcribe_audio(
         # Prepare generation kwargs
         kwargs = {"return_timestamps": timestamp_granularities == "segment"}
         kwargs["task"] = "transcribe"
+        kwargs["max_new_tokens"] = 448  # Allow longer transcriptions
 
         # Ignore client language parameter to allow auto-detection
         # This fixes issues where clients (like Open WebUI) send a default language (e.g., 'en')
@@ -358,6 +359,7 @@ async def translate_audio(
         # Prepare generation kwargs
         kwargs = {"return_timestamps": False}
         kwargs["task"] = "translate"
+        kwargs["max_new_tokens"] = 448  # Allow longer translations
 
         # Run inference
         start_time = time.time()
