@@ -21,12 +21,12 @@ import requests
 import evdev
 from pynput import mouse
 from pynput.keyboard import Controller, Key
-from scipy.io.wavfile import write as write_wav
 
 # Configuration
 SAMPLE_RATE = 16000
 CHANNELS = 1
-API_URL = "http://localhost:8000/v1/audio/transcriptions"
+API_URL = "http://100.85.200.51:8887/v1/audio/transcriptions"
+OPUS_BITRATE = 24000  # 24 kbps - good quality for speech, ~10x compression
 # evdev Key Codes
 EV_CTRL = {evdev.ecodes.KEY_LEFTCTRL, evdev.ecodes.KEY_RIGHTCTRL}
 EV_ALT = {evdev.ecodes.KEY_LEFTALT, evdev.ecodes.KEY_RIGHTALT}
@@ -176,6 +176,30 @@ class DictationClient:
 
     def _audio_callback(self, indata, frames, time, status):
         self.audio_data.append(indata.copy())
+    
+    def encode_to_ogg(self, audio_array):
+        """Encode audio to OGG format for efficient network transfer."""
+        import soundfile as sf
+        import tempfile
+        import os
+        
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as tmp:
+            tmp_path = tmp.name
+        
+        try:
+            # Write as OGG (uses Opus codec internally)
+            sf.write(tmp_path, audio_array, SAMPLE_RATE, format='OGG')
+            
+            # Read back the OGG file
+            with open(tmp_path, 'rb') as f:
+                ogg_data = f.read()
+            
+            return io.BytesIO(ogg_data)
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     def stop_recording_and_transcribe(self):
         logger.info("🛑 Stopping...")
@@ -203,11 +227,14 @@ class DictationClient:
         
         # Send to API
         try:
-            wav_buffer = io.BytesIO()
-            write_wav(wav_buffer, SAMPLE_RATE, audio_array)
-            wav_buffer.seek(0)
+            # Encode to OGG for efficient network transfer
+            ogg_buffer = self.encode_to_ogg(audio_array)
+            ogg_buffer.seek(0)
             
-            response = requests.post(API_URL, files={'file': ('audio.wav', wav_buffer, 'audio/wav')})
+            ogg_size_kb = len(ogg_buffer.getvalue()) / 1024
+            logger.info(f"📦 OGG encoded: {ogg_size_kb:.1f} KB")
+            
+            response = requests.post(API_URL, files={'file': ('audio.ogg', ogg_buffer, 'audio/ogg')})
             
             if response.status_code == 200:
                 text = response.json().get('text', '').strip()

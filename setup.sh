@@ -54,9 +54,9 @@ if command -v apt-get &> /dev/null; then
         SUDO_CMD=""
     fi
     
-    print_status "Installing python3-tk and portaudio19-dev..."
+    print_status "Installing python3-tk, portaudio19-dev, and libopus..."
     $SUDO_CMD apt-get update -qq
-    $SUDO_CMD apt-get install -y python3-tk portaudio19-dev > /dev/null 2>&1
+    $SUDO_CMD apt-get install -y python3-tk portaudio19-dev libopus0 libopus-dev > /dev/null 2>&1
     
     # Ask about Intel GPU support
     echo -n "Do you have an Intel integrated GPU and want to enable GPU acceleration? (y/n): "
@@ -66,7 +66,7 @@ if command -v apt-get &> /dev/null; then
         $SUDO_CMD apt-get install -y intel-opencl-icd intel-level-zero-gpu > /dev/null 2>&1
     fi
 else
-    print_warning "Non-apt package manager detected. Please install python3-tk and portaudio19-dev manually."
+    print_warning "Non-apt package manager detected. Please install python3-tk, portaudio19-dev, libopus0, and libopus-dev manually."
 fi
 
 # Step 2: Check for conda/mamba

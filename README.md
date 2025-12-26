@@ -14,6 +14,7 @@
 - 🎯 **OpenAI API Compatible** - Drop-in replacement for OpenAI Whisper API
 - 🌐 **Open-WebUI Integration** - Full STT support with dynamic configuration
 - 🎤 **Global Dictation Client** - System-wide voice input with `Ctrl+Alt+Space`
+- 📦 **OGG Compression** - ~7x audio compression for low-latency remote backends
 - 🧠 **Multiple Models** - INT8/INT4 quantized models for speed/quality balance
 - 🔧 **Auto-Detection** - Automatic language detection or manual selection
 - ⚙️ **Dynamic Config** - Change settings on-the-fly without restart
@@ -80,7 +81,7 @@ conda activate ov-whisper
 pip install openvino-genai faster-whisper fastapi uvicorn soundfile librosa pynput sounddevice scipy requests
 
 # 3. System dependencies (Ubuntu)
-sudo apt install python3-tk portaudio19-dev
+sudo apt install python3-tk portaudio19-dev libopus0 libopus-dev
 
 # 4. Download Model
 python setup_model.py --model int8-turbo
