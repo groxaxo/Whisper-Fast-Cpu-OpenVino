@@ -12,12 +12,12 @@ NC='\033[0m'
 
 echo -e "${GREEN}Starting Dictation Client${NC}"
 echo -e "${BLUE}Hotkey: Ctrl+Alt+Space${NC}"
-echo -e "${YELLOW}Make sure the server is running on http://100.85.200.51:8887${NC}"
+echo -e "${YELLOW}Make sure the server is running on http://100.85.200.52:8887${NC}"
 echo ""
 
 # Check if server is running
-if ! curl -s http://100.85.200.51:8887/health > /dev/null 2>&1; then
-    echo -e "${YELLOW}⚠️  Warning: Server not responding at http://100.85.200.51:8887${NC}"
+if ! curl -s http://100.85.200.52:8887/health > /dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️  Warning: Server not responding at http://100.85.200.52:8887${NC}"
     echo -e "${YELLOW}   Start server first: ./start_server.sh${NC}"
     echo ""
     read -p "Continue anyway? (y/N) " -n 1 -r

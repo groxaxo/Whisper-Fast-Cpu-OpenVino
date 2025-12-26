@@ -25,7 +25,7 @@ from pynput.keyboard import Controller, Key
 # Configuration
 SAMPLE_RATE = 16000
 CHANNELS = 1
-API_URL = "http://100.85.200.51:8887/v1/audio/transcriptions"
+API_URL = "http://100.85.200.52:8887/v1/audio/transcriptions"
 OPUS_BITRATE = 24000  # 24 kbps - good quality for speech, ~10x compression
 # evdev Key Codes
 EV_CTRL = {evdev.ecodes.KEY_LEFTCTRL, evdev.ecodes.KEY_RIGHTCTRL}

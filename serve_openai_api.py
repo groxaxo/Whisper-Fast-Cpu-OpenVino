@@ -152,37 +152,107 @@ def load_language_tokens(model_dir: str) -> Dict[str, str]:
     return language_tokens
 
 
+
+# Backend abstraction
+class FasterWhisperPipeline:
+    """Wrapper for faster-whisper to match OpenVINO API"""
+    def __init__(self, model_id: str, device: str, compute_type: str = "float16"):
+        from faster_whisper import WhisperModel
+        LOGGER.info(f"Loading Faster-Whisper model: {model_id} on {device} ({compute_type})")
+        self.model = WhisperModel(model_id, device=device, compute_type=compute_type)
+    
+    def generate(self, audio_data: list, **kwargs):
+        """mimic generate method"""
+        # faster-whisper expects a file path or numpy array
+        # audio_data is a list of floats, convert to numpy
+        audio_np = np.array(audio_data, dtype=np.float32)
+        
+        # Map kwargs
+        # OpenVINO uses 'task', 'language', 'return_timestamps'
+        # faster-whisper uses 'task', 'language', 'word_timestamps'
+        
+        fw_kwargs = {
+            "task": kwargs.get("task", "transcribe"),
+            "language": kwargs.get("language"),
+            "beam_size": 5,
+        }
+        
+        if kwargs.get("max_new_tokens"):
+             # faster-whisper doesn't have max_new_tokens in transcribe, it streams
+             # checking if we need to set anything specific. usually not needed for fw
+             pass
+
+        # faster-whisper transcribe returns (segments, info)
+        segments, info = self.model.transcribe(
+            audio_np, 
+            word_timestamps=kwargs.get("return_timestamps", False),
+            **fw_kwargs
+        )
+        
+        # Materialize generator
+        segments = list(segments)
+        
+        return FasterWhisperResult(segments, info)
+
+class FasterWhisperResult:
+    """Wrapper for result to match OpenVINO output"""
+    def __init__(self, segments, info):
+        self.segments = segments
+        self.info = info
+        # Combine text
+        self.texts = ["".join([s.text for s in segments])]
+        
+        # Wrapper for chunks if timestamps requested
+        self.chunks = []
+        for s in segments:
+            # check if segment has words
+            if hasattr(s, 'words') and s.words:
+                for w in s.words:
+                     self.chunks.append(Chunk(w.start, w.end, w.word))
+            else:
+                 self.chunks.append(Chunk(s.start, s.end, s.text))
+
+class Chunk:
+    def __init__(self, start, end, text):
+        self.start_ts = start
+        self.end_ts = end
+        self.text = text
+
+
 def build_pipeline(
-    model_dir: str, device: str, threads: int, streams: Union[str, int], hint: str
-) -> ov_genai.WhisperPipeline:
-    """Build OpenVINO Whisper pipeline"""
-    extra_kwargs: Dict[str, Union[str, int]] = {}
+    config: ServerConfig
+) -> Union[ov_genai.WhisperPipeline, FasterWhisperPipeline]:
+    """Build pipeline based on configuration"""
+    
+    if config.engine == "faster-whisper":
+        # Map device names
+        device = "cuda" if config.device.upper() in ["GPU", "CUDA"] else "cpu"
+        compute_type = "float16" if device == "cuda" else "int8"
+        
+        return FasterWhisperPipeline(
+            model_id=config.model, # e.g. "large-v3-turbo" or path
+            device=device,
+            compute_type=compute_type
+        )
+    
+    else: # OpenVINO
+        extra_kwargs: Dict[str, Union[str, int]] = {}
+        
+        # CPU-specific optimizations
+        if config.device == "CPU":
+            extra_kwargs["INFERENCE_NUM_THREADS"] = config.threads
+            extra_kwargs["PERFORMANCE_HINT"] = config.hint
+            if config.streams != "AUTO":
+                extra_kwargs["NUM_STREAMS"] = config.streams
+        
+        LOGGER.info(
+            "Loading OpenVINO pipeline (device=%s, threads=%d)",
+            config.device,
+            config.threads
+        )
+        return ov_genai.WhisperPipeline(config.model_dir, config.device, **extra_kwargs)
 
-    # CPU-specific optimizations
-    if device == "CPU":
-        extra_kwargs["INFERENCE_NUM_THREADS"] = threads
-        extra_kwargs["PERFORMANCE_HINT"] = hint
-        if streams:
-            extra_kwargs["NUM_STREAMS"] = streams
-    # GPU-specific optimizations (Intel Iris Xe, etc.)
-    elif device == "GPU":
-        extra_kwargs["PERFORMANCE_HINT"] = hint
-        # GPU streams can improve throughput for parallel requests
-        if streams:
-            extra_kwargs["NUM_STREAMS"] = streams
-    # AUTO mode - let OpenVINO decide
-    else:  # AUTO
-        extra_kwargs["PERFORMANCE_HINT"] = hint
-        if streams:
-            extra_kwargs["NUM_STREAMS"] = streams
 
-    LOGGER.info(
-        "Loading Whisper pipeline (device=%s, threads=%d, streams=%s)",
-        device,
-        threads if device == "CPU" else 0,
-        streams,
-    )
-    return ov_genai.WhisperPipeline(model_dir, device, **extra_kwargs)
 
 
 def load_audio_file(file_data: bytes) -> tuple[np.ndarray, int]:
@@ -939,6 +1009,80 @@ def print_banner():
 """
     print(banner)
 
+import argparse
+from typing import Dict
+import json
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Whisper-Fast-CPU-OpenVINO API Server")
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default="./models/whisper-tiny-en",
+        help="Path to the directory containing the OpenVINO model.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="CPU",
+        help="Device to run inference on (e.g., CPU, GPU).",
+    )
+    parser.add_argument(
+        "--host", type=str, default="0.0.0.0", help="Host address to bind to."
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Port to listen on."
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=0,
+        help="Number of threads to use for inference. 0 for automatic.",
+    )
+    parser.add_argument(
+        "--streams",
+        type=int,
+        default=0,
+        help="Number of streams to use for inference. 0 for automatic.",
+    )
+    parser.add_argument(
+        "--hint",
+        type=str,
+        default="performance",
+        choices=["performance", "latency"],
+        help="Performance hint for OpenVINO (performance or latency).",
+    )
+    parser.add_argument(
+        "--engine",
+        default="openvino",
+        choices=["openvino", "faster-whisper"],
+        help="Backend engine to use (openvino or faster-whisper).",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model ID for faster-whisper (e.g. large-v3-turbo). If not set, uses model-dir for OpenVINO.",
+    )
+    return parser.parse_args()
+
+
+def load_language_tokens(model_dir: str) -> Dict[str, str]:
+    """Load language tokens from model config"""
+    config_path = os.path.join(model_dir, "generation_config.json")
+
+    if not os.path.exists(config_path):
+        LOGGER.warning(f"Model configuration file not found: {config_path}")
+        return {}
+
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+    # Extract language mapping
+    if "lang_to_id" in config:
+        return {k: v for k, v in config["lang_to_id"].items()}
+    
+    return {}
+
 
 def main() -> None:
     """Main entry point"""
@@ -957,11 +1101,18 @@ def main() -> None:
     print_banner()
 
     # Initialize server configuration with command-line args
+    server_config.engine = args.engine
     server_config.model_dir = args.model_dir
     server_config.device = args.device
     server_config.threads = args.threads
     server_config.streams = args.streams
     server_config.hint = args.hint
+    
+    if args.model:
+        server_config.model = args.model
+    # If using OpenVINO, model is implied by model_dir, but for consistency:
+    if args.engine == "openvino":
+        server_config.model = args.model_dir
 
     # Set thread environment variables
     os.environ.setdefault("OMP_NUM_THREADS", str(args.threads))
@@ -971,9 +1122,13 @@ def main() -> None:
     os.environ.setdefault("OV_CPU_THREADS_NUM", str(args.threads))
 
     # Load model
-    LOGGER.info(f"Loading model from: {args.model_dir}")
-    language_tokens = load_language_tokens(args.model_dir)
-    pipeline = build_pipeline(args.model_dir, args.device, args.threads, args.streams, args.hint)
+    if args.engine == "openvino":
+        LOGGER.info(f"Loading OpenVINO model from: {args.model_dir}")
+        language_tokens = load_language_tokens(args.model_dir)
+    else:
+        LOGGER.info(f"Loading Faster-Whisper model: {server_config.model}")
+        
+    pipeline = build_pipeline(server_config)
     LOGGER.info("Model loaded successfully!")
 
     # Start server
